@@ -1,0 +1,140 @@
+---
+title: "ChildMarriage"
+author: "Holly Duong"
+date: "2024-02-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE}
+# load packges
+library(readr)
+library(dplyr)
+```
+
+
+```{r message=FALSE, warning=FALSE}
+# import datasets
+female <- read_csv("Desktop/DA 401/Data/wm.csv")
+male <- read_csv("Desktop/DA 401/Data/mn.csv")
+```
+
+
+```{r}
+# get a glimpse of datasets
+head(female)
+head(male)
+```
+
+```{r}
+# Select the specified columns to create a new dataframe
+female_df <- select(female, HH6, HH7, WAGEM, MSTATUS, welevel, insurance, ethnicity, windex5, CP5, AB12A, AB12B, CP2, CP3, AB12D, SB1, MA1, MA2, MA5, HA1)
+
+# View the first few rows of the new dataframe
+head(female_df)
+```
+
+
+```{r}
+# Rename the columns
+female_df <- female_df %>%
+  rename(
+    Area = HH6,
+    Region = HH7,
+    AgeFirstMarriage = WAGEM,
+    MaritalStatus = MSTATUS,
+    EducationLevel = welevel,
+    HealthInsurance = insurance,
+    Ethnicity = ethnicity,
+    WealthIndexQuintile = windex5,
+    DecisionContraceptiveUse = CP5,
+    FamilyPlanningFailure = AB12A,
+    UnwantedPregnancy = AB12B,
+    CurrentContraceptiveUse = CP2,
+    EverContraceptiveUse = CP3,
+    EconomicBarrierChildCare = AB12D,
+    AgeFirstSexualIntercourse = SB1,
+    CurrentlyMarried = MA1,
+    PartnerAge = MA2,
+    EverMarried = MA5,
+    AwarenessHIV_AIDS = HA1
+  )
+
+# View the first few rows of the renamed dataframe
+head(female_df)
+```
+
+
+```{r}
+female_df <- female_df %>%
+  select(
+    AgeFirstMarriage,
+    Area,
+    Region,
+    Ethnicity,
+    EducationLevel,
+    WealthIndexQuintile,
+    HealthInsurance,
+    MaritalStatus,
+    CurrentlyMarried,
+    EverMarried,
+    PartnerAge,
+    AgeFirstSexualIntercourse,
+    FamilyPlanningFailure,
+    UnwantedPregnancy,
+    CurrentContraceptiveUse,
+    EverContraceptiveUse,
+    DecisionContraceptiveUse,
+    EconomicBarrierChildCare,
+    AwarenessHIV_AIDS
+  )
+
+# View the first few rows of the renamed dataframe
+head(female_df)
+```
+
+
+```{r}
+# Summarize data
+summary(female_df)
+```
+
+
+```{r}
+# Summarize missing values by column
+summarize_missing <- sapply(female_df, function(x) sum(is.na(x)))
+print(summarize_missing)
+```
+
+
+```{r}
+# Removing specified columns from female_df using subset()
+# Removing because of extensive missing data
+female_df <- subset(female_df, select = -c(EconomicBarrierChildCare, FamilyPlanningFailure, UnwantedPregnancy))
+head(female_df)
+```
+
+
+```{r}
+# Imputing missing data
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
