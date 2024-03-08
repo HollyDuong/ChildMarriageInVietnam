@@ -1,8 +1,11 @@
 ---
-title: "ChildMarriage"
+title: "Child Marriage Phenomenon In Vietnam"
 author: "Holly Duong"
 date: "2024-02-29"
-output: html_document
+output:
+  word_document: default
+  html_document: default
+  always_allow_html: true
 ---
 
 ```{r setup, include=FALSE}
@@ -10,98 +13,63 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r message=FALSE, warning=FALSE}
-# load packges
+# load packages
 library(readr)
 library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(corrplot)
+library(plotly)
+library(reshape2)
+library(car)
+library(kableExtra)
+library(broom)
+library(knitr)
 ```
 
+### Setting up Data
 
 ```{r message=FALSE, warning=FALSE}
-# import datasets
-female <- read_csv("Desktop/DA 401/Data/wm.csv")
-male <- read_csv("Desktop/DA 401/Data/mn.csv")
+# import dataset
+female <- read_csv("/Users/hollyduong/Desktop/DA 401/ChildMarriageInVietnam/Data/wm.csv")
 ```
 
-
 ```{r}
-# get a glimpse of datasets
+# get a glimpse of dataset
 head(female)
-head(male)
 ```
 
 ```{r}
 # Select the specified columns to create a new dataframe
-female_df <- select(female, HH6, HH7, WAGEM, MSTATUS, welevel, insurance, ethnicity, windex5, CP5, AB12A, AB12B, CP2, CP3, AB12D, SB1, MA1, MA2, MA5, HA1)
+female_df <- select(female, WAGEM, HH6, HH7, MSTATUS, welevel, insurance, ethnicity, windex5, CP2, HA1, MT4, MT9, MT11)
 
 # View the first few rows of the new dataframe
-head(female_df)
+summary(female_df)
 ```
-
 
 ```{r}
 # Rename the columns
 female_df <- female_df %>%
   rename(
-    Area = HH6,
-    Region = HH7,
-    AgeFirstMarriage = WAGEM,
-    MaritalStatus = MSTATUS,
-    EducationLevel = welevel,
-    HealthInsurance = insurance,
-    Ethnicity = ethnicity,
-    WealthIndexQuintile = windex5,
-    DecisionContraceptiveUse = CP5,
-    FamilyPlanningFailure = AB12A,
-    UnwantedPregnancy = AB12B,
-    CurrentContraceptiveUse = CP2,
-    EverContraceptiveUse = CP3,
-    EconomicBarrierChildCare = AB12D,
-    AgeFirstSexualIntercourse = SB1,
-    CurrentlyMarried = MA1,
-    PartnerAge = MA2,
-    EverMarried = MA5,
-    AwarenessHIV_AIDS = HA1
-  )
-
-# View the first few rows of the renamed dataframe
-head(female_df)
+  age_first_marriage = WAGEM,
+  area = HH6,
+  region = HH7,
+  marital_status = MSTATUS,
+  education_level = welevel,
+  health_insurance = insurance,
+  ethnicity = ethnicity,
+  wealth_index = windex5,
+#  contraceptive_decision_maker = CP5, #R
+  current_contraceptive_use = CP2,
+# age_first_sexual_intercourse = SB1, #R
+#  currently_married = MA1,
+#  partner_age = MA2, #R
+  awareness_hiv_aids = HA1,
+  used_computer_tablet = MT4,
+  used_internet = MT9,
+  owns_mobile_phone = MT11
+)
 ```
-
-
-```{r}
-female_df <- female_df %>%
-  select(
-    AgeFirstMarriage,
-    Area,
-    Region,
-    Ethnicity,
-    EducationLevel,
-    WealthIndexQuintile,
-    HealthInsurance,
-    MaritalStatus,
-    CurrentlyMarried,
-    EverMarried,
-    PartnerAge,
-    AgeFirstSexualIntercourse,
-    FamilyPlanningFailure,
-    UnwantedPregnancy,
-    CurrentContraceptiveUse,
-    EverContraceptiveUse,
-    DecisionContraceptiveUse,
-    EconomicBarrierChildCare,
-    AwarenessHIV_AIDS
-  )
-
-# View the first few rows of the renamed dataframe
-head(female_df)
-```
-
-
-```{r}
-# Summarize data
-summary(female_df)
-```
-
 
 ```{r}
 # Summarize missing values by column
@@ -109,17 +77,290 @@ summarize_missing <- sapply(female_df, function(x) sum(is.na(x)))
 print(summarize_missing)
 ```
 
+```{r}
+# Recode the value 9 to NA for specified variables
+female_df <- female_df %>%
+  mutate(
+    current_contraceptive_use = na_if(current_contraceptive_use, 9),
+    used_internet = na_if(used_internet, 9),
+    health_insurance = na_if(health_insurance, 9),
+    education_level = na_if(education_level, 9),
+    awareness_hiv_aids = na_if(awareness_hiv_aids, 9),
+    used_computer_tablet = na_if(used_computer_tablet, 9),
+    owns_mobile_phone = na_if(owns_mobile_phone, 9),
+    marital_status = na_if(marital_status, 9)
+  )
+
+# Recode the value 6 to NA for 'ethnicity'
+female_df$ethnicity <- na_if(female_df$ethnicity, 6)
+```
 
 ```{r}
-# Removing specified columns from female_df using subset()
-# Removing because of extensive missing data
-female_df <- subset(female_df, select = -c(EconomicBarrierChildCare, FamilyPlanningFailure, UnwantedPregnancy))
-head(female_df)
+# Recoding variables from 1 (Yes) and 2 (No) to 1 (Yes) and 0 (No)
+female_df$health_insurance <- ifelse(female_df$health_insurance == 2, 0, female_df$health_insurance)
+female_df$current_contraceptive_use <- ifelse(female_df$current_contraceptive_use == 2, 0, female_df$current_contraceptive_use)
+female_df$awareness_hiv_aids <- ifelse(female_df$awareness_hiv_aids == 2, 0, female_df$awareness_hiv_aids)
+female_df$used_computer_tablet <- ifelse(female_df$used_computer_tablet == 2, 0, female_df$used_computer_tablet)
+female_df$owns_mobile_phone <- ifelse(female_df$owns_mobile_phone == 2, 0, female_df$owns_mobile_phone)
+female_df$used_internet <- ifelse(female_df$used_internet == 2, 0, female_df$used_internet)
+```
+
+```{r}
+# View the changes to ensure NA substitution has been correctly applied
+summary(female_df)
+```
+
+### Creating New Variable `Access to Media`
+
+```{r}
+# Combine individual variables for access to the internet, phone, and computer into a single variable
+# This new variable "access_to_media" will have a value of 1 if the respondent has access to any of these media sources, and 0 if not
+# This provides a more comprehensive measure of media access
+female_df <- female_df %>%
+  mutate(access_to_media = ifelse(used_computer_tablet == 1 | used_internet == 1 | owns_mobile_phone == 1, 1, 0))
+
+# In later analysis, use access_to_media instead of the 3 separate variables
+```
+
+```{r}
+# Exporting female_df to a CSV file in the current working directory
+#write.csv(female_df, "female_df.csv", row.names = FALSE)
+```
+
+### Distributions of Data
+
+```{r}
+# Histogram for 'Age at First Marriage'
+afm_hist <- ggplot(female_df, aes(x = age_first_marriage)) +
+  geom_histogram(fill = "blue", color = "white") +
+  theme_minimal() +
+  ggtitle("Histogram of Age at First Marriage") +
+  xlab("Age at First Marriage") +
+  ylab("Frequency")
+
+print(afm_hist)
+```
+
+```{r}
+# Saving the histogram
+#ggsave("histogram_age_first_marriage.png", plot = afm_hist, width = 8, height = 6, dpi = 300)
+```
+
+```{r}
+# Plotting a boxplot for 'Age at First Marriage'
+ggplot(female_df, aes(y = age_first_marriage)) +
+  geom_boxplot(fill = "cyan") +
+  labs(title = "Boxplot of Age at First Marriage", y = "Age at First Marriage") +
+  theme_minimal()
+```
+
+```{r}
+# Bar plot for 'used_internet'
+ggplot(female_df, aes(x = used_internet)) +
+  geom_bar(fill = "yellow") +
+  theme_minimal() +
+  ggtitle("Bar Plot of Used Internet") +
+  xlab("Used Internet") +
+  ylab("Count")
+```
+
+### Handling Missing Data
+
+```{r}
+# Before that, let's double check the count of missing values by column
+count_missing <- sapply(female_df, function(x) sum(is.na(x)))
+print(count_missing)
+```
+
+```{r}
+# Make a copy of female_df for imputation
+imputed_df <- female_df
+```
+
+```{r}
+# Handle missing values in 'Age at First Marriage'
+
+# Calculate the median value for 'Age at First Marriage', excluding NA values
+median_age_first_marriage <- median(imputed_df$age_first_marriage, na.rm = TRUE)
+
+# Impute missing values in 'Age at First Marriage' with the median value
+imputed_df$age_first_marriage[is.na(imputed_df$age_first_marriage)] <- median_age_first_marriage
+```
+
+```{r}
+# Define a function to calculate mode for categorical variables
+getMode <- function(v) {
+  # The mode is the value that appears most frequently in the data
+  uniqv <- unique(na.omit(v))  # Omit NA values and get unique values
+  uniqv[which.max(tabulate(match(v, uniqv)))]  # Return the value with the highest frequency
+}
+```
+
+```{r}
+# For 'ethnicity', an ordinal variable with predefined categories, it makes sense to impute missing values with the mode.
+mode_ethnicity <- getMode(imputed_df$ethnicity)
+imputed_df <- mutate(imputed_df, ethnicity = ifelse(is.na(ethnicity), mode_ethnicity, ethnicity))
+
+# Binary variables like 'current_contraceptive_use', 'health_insurance','awareness_hiv_aids', 'used_internet', 'used_computer_tablet', 'owns_mobile_phone', and 'access_to_media'
+# should be imputed with the mode since it represents the most frequent category (either 0 or 1).
+
+# Calculate the mode for each binary variable
+mode_used_internet <- getMode(imputed_df$used_internet)
+mode_current_contraceptive_use <- getMode(imputed_df$current_contraceptive_use)
+mode_health_insurance <- getMode(imputed_df$health_insurance)
+mode_awareness_hiv_aids <- getMode(imputed_df$awareness_hiv_aids)
+mode_used_computer_tablet <- getMode(imputed_df$used_computer_tablet)
+mode_owns_mobile_phone <- getMode(imputed_df$owns_mobile_phone)
+mode_access_to_media <- getMode(imputed_df$access_to_media)
+
+# Impute missing values for binary variables
+imputed_df <- mutate(imputed_df,
+  used_internet = ifelse(is.na(used_internet), mode_used_internet, used_internet),
+  current_contraceptive_use = ifelse(is.na(current_contraceptive_use), mode_current_contraceptive_use, current_contraceptive_use),
+  health_insurance = ifelse(is.na(health_insurance), mode_health_insurance, health_insurance),
+  awareness_hiv_aids = ifelse(is.na(awareness_hiv_aids), mode_awareness_hiv_aids, awareness_hiv_aids),
+  used_computer_tablet = ifelse(is.na(used_computer_tablet), mode_used_computer_tablet, used_computer_tablet),
+  owns_mobile_phone = ifelse(is.na(owns_mobile_phone), mode_owns_mobile_phone, owns_mobile_phone),
+  access_to_media = ifelse(is.na(access_to_media), mode_access_to_media, access_to_media)
+)
+
+# 'education_level' is an ordinal variable where the median could be a more suitable measure of central tendency than the mode.
+# However, given the categorical nature of the levels (e.g., "Primary", "Secondary"), using the mode may still be appropriate.
+mode_education_level <- getMode(imputed_df$education_level)
+imputed_df <- mutate(imputed_df, education_level = ifelse(is.na(education_level), mode_education_level, education_level))
+```
+
+```{r}
+# Check the resulting dataset to confirm changes
+summary(imputed_df)
+```
+
+```{r}
+# After imputation, let's check for missing values
+count_imputation <- sapply(imputed_df, function(x) sum(is.na(x)))
+print(count_imputation)
+```
+
+### Visualization Comparing Before vs. After Imputation
+
+```{r}
+# Histogram for 'age_first_marriage' before imputation
+afm_0 <- ggplot(female_df, aes(x = age_first_marriage)) + 
+  geom_histogram(fill = "lightpink", color = "white", bins = 30) +
+  theme_light() +
+  ggtitle("Age at First Marriage Before Imputation") +
+  xlab("Age at First Marriage") +
+  ylab("Frequency")
+
+# Histogram for 'age_first_marriage' after imputation
+afm_imputed <- ggplot(imputed_df, aes(x = age_first_marriage)) + 
+  geom_histogram(fill = "plum", color = "white", bins = 30) +
+  theme_light() +
+  ggtitle("Age at First Marriage After Imputation") +
+  xlab("Age at First Marriage") +
+  ylab("Frequency")
+
+# Arrange the two plots side by side
+grid.arrange(afm_0, afm_imputed, ncol = 2)
 ```
 
 
 ```{r}
-# Imputing missing data
+# Arrange the two plots side by side and capture the layout as a grob
+combined_plots <- arrangeGrob(afm_0, afm_imputed, ncol = 2)
+
+# Now, use ggsave to save the combined plot
+ggsave("combined_age_first_marriage.png", plot = combined_plots, width = 10, height = 5)
+```
+
+### Creating Binary Variables for Child Marriage Under 18 and 15
+
+```{r}
+# Convert "age at first marriage" into a binary variable to indicate child marriage
+# Child marriage is defined as marriage before the age of 18
+# The new binary variable "child_marriage" will have a value of 1 if the marriage occurred before age 18, and 0 otherwise
+imputed_df <- imputed_df %>%
+  mutate(child_marriage = ifelse(age_first_marriage < 18, 1, 0))
+```
+
+```{r}
+# Create a binary variable for child marriage under 15
+# The new variable "child_marriage_u15" will have a value of 1 if the marriage occurred before age 15, and 0 otherwise
+imputed_df <- imputed_df %>%
+  mutate(child_marriage_u15 = ifelse(age_first_marriage < 15, 1, 0))
+```
+
+```{r}
+# Move "child_marriage" and "child_marriage_u15" to the front of the dataframe
+imputed_df <- imputed_df %>%
+  select(child_marriage, child_marriage_u15, everything())
+```
+
+### Preparing for Regression Analysis
+
+#### Correlation Matrix
+
+```{r}
+# Calculate correlation matrix
+cor_matrix <- cor(imputed_df %>% select_if(is.numeric), use = "complete.obs")
+
+# Melt the correlation matrix
+melted_cor_matrix <- melt(cor_matrix)
+```
+
+```{r}
+# Generate an interactive heatmap
+corr_matrix <- ggplot(melted_cor_matrix, aes(Var1, Var2, fill = value)) +
+    geom_tile() +
+    scale_fill_gradientn(
+        colours = c("deepskyblue", "white", "red2"),
+        values = scales::rescale(c(-1, 0, 1)),
+        limits = c(-1, 1),
+        name="Pearson\nCorrelation"
+    ) +
+    theme_minimal() + 
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    xlab("") + 
+    ylab("") +
+    ggtitle("Correlation Matrix") 
+
+# Convert ggplot object to plotly for interactivity
+ggplotly(corr_matrix)
+```
+
+
+#### Accessing Multicollinearity
+
+```{r}
+# Model with all predictors
+model_for_vif <- lm(child_marriage ~ area + region + marital_status + education_level + health_insurance + ethnicity + wealth_index + current_contraceptive_use + awareness_hiv_aids + access_to_media, data = imputed_df)
+
+# Calculate VIF (A VIF value > 5 indicates high multicollinearity)
+vif_results <- vif(model_for_vif)
+print(vif_results)
+```
+
+#### Converting Categorical and Binary Variables to Factors
+
+```{r}
+# Convert nominal and ordinal variables to factors
+imputed_df$area <- as.factor(imputed_df$area)
+imputed_df$region <- as.factor(imputed_df$region)
+imputed_df$marital_status <- as.factor(imputed_df$marital_status)
+imputed_df$education_level <- factor(imputed_df$education_level, ordered = TRUE)
+imputed_df$ethnicity <- as.factor(imputed_df$ethnicity)
+imputed_df$wealth_index <- factor(imputed_df$wealth_index, ordered = TRUE)
+
+# Binary variables are already in the correct format and can be used as is
+```
+
+### Baseline Logistic Regression Model
+
+```{r}
+baseline_model <- glm(child_marriage ~ area + region + marital_status + education_level + health_insurance + ethnicity + wealth_index + current_contraceptive_use + awareness_hiv_aids + access_to_media, family = binomial(), data = imputed_df)
+
+# Check the model summary to interpret the coefficients
+summary(baseline_model)
 ```
 
 
