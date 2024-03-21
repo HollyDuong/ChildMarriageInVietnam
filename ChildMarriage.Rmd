@@ -25,6 +25,8 @@ library(car)
 library(kableExtra)
 library(broom)
 library(knitr)
+library(pROC)
+library(ggpattern)
 ```
 
 ### Setting up Data
@@ -41,7 +43,7 @@ head(female)
 
 ```{r}
 # Select the specified columns to create a new dataframe
-female_df <- select(female, WAGEM, HH6, HH7, MSTATUS, welevel, insurance, ethnicity, windex5, CP2, HA1, MT4, MT9, MT11)
+female_df <- select(female, WAGEM, MSTATUS, HH6, HH7, welevel, insurance, ethnicity, windex5, CP2, HA1, MT4, MT9, MT11)
 
 # View the first few rows of the new dataframe
 summary(female_df)
@@ -52,9 +54,9 @@ summary(female_df)
 female_df <- female_df %>%
   rename(
   age_first_marriage = WAGEM,
+  marital_status = MSTATUS,
   area = HH6,
   region = HH7,
-  marital_status = MSTATUS,
   education_level = welevel,
   health_insurance = insurance,
   ethnicity = ethnicity,
@@ -177,6 +179,7 @@ print(count_missing)
 imputed_df <- female_df
 ```
 
+
 ```{r}
 # Handle missing values in 'Age at First Marriage'
 
@@ -200,6 +203,13 @@ getMode <- function(v) {
 # For 'ethnicity', an ordinal variable with predefined categories, it makes sense to impute missing values with the mode.
 mode_ethnicity <- getMode(imputed_df$ethnicity)
 imputed_df <- mutate(imputed_df, ethnicity = ifelse(is.na(ethnicity), mode_ethnicity, ethnicity))
+mode_area <- getMode(imputed_df$area)
+imputed_df <- mutate(imputed_df, area = ifelse(is.na(area), mode_area, area))
+mode_region <- getMode(imputed_df$region)
+imputed_df <- mutate(imputed_df, region = ifelse(is.na(region), mode_region, region))
+mode_marital_status <- getMode(imputed_df$marital_status)
+imputed_df <- mutate(imputed_df, marital_status = ifelse(is.na(marital_status), mode_marital_status, marital_status))
+
 
 # Binary variables like 'current_contraceptive_use', 'health_insurance','awareness_hiv_aids', 'used_internet', 'used_computer_tablet', 'owns_mobile_phone', and 'access_to_media'
 # should be imputed with the mode since it represents the most frequent category (either 0 or 1).
@@ -241,6 +251,7 @@ count_imputation <- sapply(imputed_df, function(x) sum(is.na(x)))
 print(count_imputation)
 ```
 
+
 ### Visualization Comparing Before vs. After Imputation
 
 ```{r}
@@ -273,7 +284,7 @@ combined_plots <- arrangeGrob(afm_0, afm_imputed, ncol = 2)
 ggsave("combined_age_first_marriage.png", plot = combined_plots, width = 10, height = 5)
 ```
 
-### Creating Binary Variables for Child Marriage Under 18 and 15
+### Creating Binary Variables for Child Marriage Under 18 and 16
 
 ```{r}
 # Convert "age at first marriage" into a binary variable to indicate child marriage
@@ -284,16 +295,84 @@ imputed_df <- imputed_df %>%
 ```
 
 ```{r}
-# Create a binary variable for child marriage under 15
-# The new variable "child_marriage_u15" will have a value of 1 if the marriage occurred before age 15, and 0 otherwise
+# Create a binary variable for child marriage under 16
+# The new variable "child_marriage_u16" will have a value of 1 if the marriage occurred before age 16, and 0 otherwise
 imputed_df <- imputed_df %>%
-  mutate(child_marriage_u15 = ifelse(age_first_marriage < 15, 1, 0))
+  mutate(child_marriage_u16 = ifelse(age_first_marriage < 16, 1, 0))
 ```
 
 ```{r}
-# Move "child_marriage" and "child_marriage_u15" to the front of the dataframe
+# Move "child_marriage" and "child_marriage_u16" to the front of the dataframe
 imputed_df <- imputed_df %>%
-  select(child_marriage, child_marriage_u15, everything())
+  select(child_marriage, child_marriage_u16, everything())
+```
+
+```{r}
+# Exporting female_df to a CSV file in the current working directory
+write.csv(imputed_df, "imputed_df.csv", row.names = FALSE)
+```
+
+### EDA
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+# Calculate total observations
+total_obs <- nrow(imputed_df)
+
+# Aggregate counts for each category by region without altering the original 'region' field
+counts_df <- aggregate(cbind(ever_married = imputed_df$marital_status %in% c(1, 2), 
+                             married_u18 = imputed_df$child_marriage == 1, 
+                             married_u16 = imputed_df$child_marriage_u16 == 1) ~ region, 
+                       data = imputed_df, 
+                       FUN = sum)
+
+# Convert counts to percentages
+counts_df$ever_married <- (counts_df$ever_married / total_obs) * 100
+counts_df$married_u18 <- (counts_df$married_u18 / total_obs) * 100
+counts_df$married_u16 <- (counts_df$married_u16 / total_obs) * 100
+
+# Load necessary libraries for plotting
+library(ggplot2)
+library(plotly)
+
+# Creating the plot with ggplot2, directly labeling regions
+p <- ggplot(counts_df, aes(x = factor(region))) +
+  geom_bar(aes(y = ever_married, fill = "Ever married or cohabited"), stat = "identity") +
+  geom_bar(aes(y = married_u18, fill = "Married or cohabited before 18 years old"), stat = "identity") +
+  geom_bar(aes(y = married_u16, fill = "Married or cohabited before 16 years old"), stat = "identity") +
+  scale_fill_manual(values = c("Ever married or cohabited" = "snow2", 
+                               "Married or cohabited before 18 years old" = "grey", 
+                               "Married or cohabited before 16 years old" = "black"),
+                    name = "Marital Status") +
+  labs(x = "Region", y = "Percentage", title = "Prevalence of Child Marriage by Regions Among Females") +
+  theme_minimal() +
+  theme(plot.margin = margin(t = 10, r = 10, b = 10, l = 10, unit = "mm"), 
+        axis.text.x = element_text(angle = 45, hjust = 1), 
+        legend.position = "right") +
+  scale_x_discrete(labels = c("1" = "Red River Delta", "2" = "Northern Midlands And Mountain", 
+                              "3" = "North Central And Central Coastal", "4" = "Central Highlands", 
+                              "5" = "South East", "6" = "Mekong River Delta"))
+
+# Convert ggplot object to plotly for interactive visualization
+ggplotly(p)
+
+```
+
+```{r}
+
+```
+
+
+```{r}
 ```
 
 ### Preparing for Regression Analysis
@@ -333,7 +412,7 @@ ggplotly(corr_matrix)
 
 ```{r}
 # Model with all predictors
-model_for_vif <- lm(child_marriage ~ area + region + marital_status + education_level + health_insurance + ethnicity + wealth_index + current_contraceptive_use + awareness_hiv_aids + access_to_media, data = imputed_df)
+model_for_vif <- lm(child_marriage ~ area + region + education_level + health_insurance + ethnicity + wealth_index + current_contraceptive_use + awareness_hiv_aids + access_to_media, data = imputed_df)
 
 # Calculate VIF (A VIF value > 5 indicates high multicollinearity)
 vif_results <- vif(model_for_vif)
@@ -346,7 +425,6 @@ print(vif_results)
 # Convert nominal and ordinal variables to factors
 imputed_df$area <- as.factor(imputed_df$area)
 imputed_df$region <- as.factor(imputed_df$region)
-imputed_df$marital_status <- as.factor(imputed_df$marital_status)
 imputed_df$education_level <- factor(imputed_df$education_level, ordered = TRUE)
 imputed_df$ethnicity <- as.factor(imputed_df$ethnicity)
 imputed_df$wealth_index <- factor(imputed_df$wealth_index, ordered = TRUE)
@@ -357,20 +435,92 @@ imputed_df$wealth_index <- factor(imputed_df$wealth_index, ordered = TRUE)
 ### Baseline Logistic Regression Model
 
 ```{r}
-baseline_model <- glm(child_marriage ~ area + region + marital_status + education_level + health_insurance + ethnicity + wealth_index + current_contraceptive_use + awareness_hiv_aids + access_to_media, family = binomial(), data = imputed_df)
+# Baseline model for reference
+baseline_model <- glm(child_marriage ~ area + education_level + wealth_index + health_insurance + current_contraceptive_use + awareness_hiv_aids + access_to_media, family = binomial(), data = imputed_df)
 
-# Check the model summary to interpret the coefficients
+# Summarize the baseline model
 summary(baseline_model)
 ```
 
 
 ```{r}
+# Adding "Region" as Fixed Effect to baseline model
+model_with_region <- update(baseline_model, . ~ . + region)
+
+summary(model_with_region)
 ```
 
 
 ```{r}
+# Adding "Ethnicity" and "Region" as Fixed Effects to baseline model
+model_with_ethnicity_and_region <- update(model_with_region, . ~ . + ethnicity)
+
+summary(model_with_ethnicity_and_region)
 ```
 
+
+```{r}
+# Comparing AIC and BIC
+cat("AIC - Baseline without Fixed Effects:", AIC(baseline_model), "\n")
+cat("AIC - With Region:", AIC(model_with_region), "\n")
+cat("AIC - With Ethnicity and Region:", AIC(model_with_ethnicity_and_region), "\n")
+
+cat("BIC - Baseline without Fixed Effects:", BIC(baseline_model), "\n")
+cat("BIC - With Region:", BIC(model_with_region), "\n")
+cat("BIC - With Ethnicity and Region:", BIC(model_with_ethnicity_and_region), "\n")
+```
+
+Lower AIC or BIC values indicate a better-fitting model
+
+
+```{r}
+# Basic diagnostic plots for the current model
+# Step 1: Open a graphics device to save your plot as a PNG image.
+# Specify the filename and path if you want to save it somewhere specific.
+#png("diagnostic_plots.png", width = 960, height = 960)
+
+# Step 2: Run your plotting commands.
+par(mfrow = c(2, 2))
+plot(model_with_ethnicity_and_region)
+
+# Step 3: Close the graphics device to save the plot.
+#dev.off()
+```
+
+```{r}
+
+```
+
+```{r}
+#ggsave("Distribution of Predicted Probabilities.png", plot = lmao, width = 8, height = 6, dpi = 300)
+
+```
+
+```{r}
+# CONSIDER REMOVING NON-SIGNIFICANT VARS FIRST (?)
+```
+
+
+```{r}
+# Adding the interaction term between education level and wealth index
+model_with_wealth_educ_interaction <- update(model_with_ethnicity_and_region, . ~ . + education_level:wealth_index)
+summary(model_with_wealth_educ_interaction)
+```
+
+Not moving forward with this interaction terms as the NAs indicate a level of multicollinearity or data sparsity.
+
+```{r}
+cat("AIC:", AIC(model_with_wealth_educ_interaction), "\nBIC:", BIC(model_with_wealth_educ_interaction), "\n")
+```
+
+
+```{r}
+# Adding the interaction term between education level and wealth index
+model_with_area_educ_interaction <- update(model_with_ethnicity_and_region, . ~ . + education_level:area)
+summary(model_with_area_educ_interaction)
+```
+
+Interaction terms are not significant. Need further investigation.
 
 ```{r}
 ```
