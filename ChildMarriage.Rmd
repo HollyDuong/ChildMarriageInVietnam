@@ -4,8 +4,9 @@ author: "Holly Duong"
 date: "2024-02-29"
 output:
   word_document: default
-  html_document: default
+  pdf_document: default
   always_allow_html: true
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -27,6 +28,8 @@ library(broom)
 library(knitr)
 library(pROC)
 library(ggpattern)
+library(tidyr)
+
 ```
 
 ### Setting up Data
@@ -95,6 +98,9 @@ female_df <- female_df %>%
 
 # Recode the value 6 to NA for 'ethnicity'
 female_df$ethnicity <- na_if(female_df$ethnicity, 6)
+
+# Recode the value 0 to NA for 'wealth_index'
+female_df$wealth_index <- na_if(female_df$wealth_index, 0)
 ```
 
 ```{r}
@@ -134,7 +140,7 @@ female_df <- female_df %>%
 ```{r}
 # Histogram for 'Age at First Marriage'
 afm_hist <- ggplot(female_df, aes(x = age_first_marriage)) +
-  geom_histogram(fill = "blue", color = "white") +
+  geom_histogram(fill = "cyan", color = "black") +
   theme_minimal() +
   ggtitle("Histogram of Age at First Marriage") +
   xlab("Age at First Marriage") +
@@ -149,21 +155,21 @@ print(afm_hist)
 ```
 
 ```{r}
-# Plotting a boxplot for 'Age at First Marriage'
-ggplot(female_df, aes(y = age_first_marriage)) +
-  geom_boxplot(fill = "cyan") +
-  labs(title = "Boxplot of Age at First Marriage", y = "Age at First Marriage") +
-  theme_minimal()
+# # Plotting a boxplot for 'Age at First Marriage'
+# ggplot(female_df, aes(y = age_first_marriage)) +
+#   geom_boxplot(fill = "cyan") +
+#   labs(title = "Boxplot of Age at First Marriage", y = "Age at First Marriage") +
+#   theme_minimal()
 ```
 
 ```{r}
-# Bar plot for 'used_internet'
-ggplot(female_df, aes(x = used_internet)) +
-  geom_bar(fill = "yellow") +
-  theme_minimal() +
-  ggtitle("Bar Plot of Used Internet") +
-  xlab("Used Internet") +
-  ylab("Count")
+# # Bar plot for 'used_internet'
+# ggplot(female_df, aes(x = used_internet)) +
+#   geom_bar(fill = "yellow") +
+#   theme_minimal() +
+#   ggtitle("Bar Plot of Used Internet") +
+#   xlab("Used Internet") +
+#   ylab("Count")
 ```
 
 ### Handling Missing Data
@@ -178,7 +184,6 @@ print(count_missing)
 # Make a copy of female_df for imputation
 imputed_df <- female_df
 ```
-
 
 ```{r}
 # Handle missing values in 'Age at First Marriage'
@@ -238,7 +243,13 @@ imputed_df <- mutate(imputed_df,
 # However, given the categorical nature of the levels (e.g., "Primary", "Secondary"), using the mode may still be appropriate.
 mode_education_level <- getMode(imputed_df$education_level)
 imputed_df <- mutate(imputed_df, education_level = ifelse(is.na(education_level), mode_education_level, education_level))
+
+# 'wealth_index' is an ordinal variable where the median could be a more suitable measure of central tendency than the mode.
+# However, given the categorical nature of the levels (e.g., "Poorest", "Poor",...), using the mode may still be appropriate.
+mode_wealth_index <- getMode(imputed_df$wealth_index)
+imputed_df <- mutate(imputed_df, wealth_index = ifelse(is.na(wealth_index), mode_wealth_index, wealth_index))
 ```
+
 
 ```{r}
 # Check the resulting dataset to confirm changes
@@ -251,13 +262,12 @@ count_imputation <- sapply(imputed_df, function(x) sum(is.na(x)))
 print(count_imputation)
 ```
 
-
 ### Visualization Comparing Before vs. After Imputation
 
 ```{r}
 # Histogram for 'age_first_marriage' before imputation
 afm_0 <- ggplot(female_df, aes(x = age_first_marriage)) + 
-  geom_histogram(fill = "lightpink", color = "white", bins = 30) +
+  geom_histogram(fill = "lightpink", color = "black", bins = 30) +
   theme_light() +
   ggtitle("Age at First Marriage Before Imputation") +
   xlab("Age at First Marriage") +
@@ -265,7 +275,7 @@ afm_0 <- ggplot(female_df, aes(x = age_first_marriage)) +
 
 # Histogram for 'age_first_marriage' after imputation
 afm_imputed <- ggplot(imputed_df, aes(x = age_first_marriage)) + 
-  geom_histogram(fill = "plum", color = "white", bins = 30) +
+  geom_histogram(fill = "plum", color = "black", bins = 30) +
   theme_light() +
   ggtitle("Age at First Marriage After Imputation") +
   xlab("Age at First Marriage") +
@@ -275,13 +285,12 @@ afm_imputed <- ggplot(imputed_df, aes(x = age_first_marriage)) +
 grid.arrange(afm_0, afm_imputed, ncol = 2)
 ```
 
-
 ```{r}
 # Arrange the two plots side by side and capture the layout as a grob
 combined_plots <- arrangeGrob(afm_0, afm_imputed, ncol = 2)
 
 # Now, use ggsave to save the combined plot
-ggsave("combined_age_first_marriage.png", plot = combined_plots, width = 10, height = 5)
+#ggsave("combined_age_first_marriage.png", plot = combined_plots, width = 10, height = 5)
 ```
 
 ### Creating Binary Variables for Child Marriage Under 18 and 16
@@ -315,16 +324,6 @@ write.csv(imputed_df, "imputed_df.csv", row.names = FALSE)
 ### EDA
 
 ```{r}
-
-```
-
-
-```{r}
-
-```
-
-
-```{r}
 # Calculate total observations
 total_obs <- nrow(imputed_df)
 
@@ -340,9 +339,6 @@ counts_df$ever_married <- (counts_df$ever_married / total_obs) * 100
 counts_df$married_u18 <- (counts_df$married_u18 / total_obs) * 100
 counts_df$married_u16 <- (counts_df$married_u16 / total_obs) * 100
 
-# Load necessary libraries for plotting
-library(ggplot2)
-library(plotly)
 
 # Creating the plot with ggplot2, directly labeling regions
 p <- ggplot(counts_df, aes(x = factor(region))) +
@@ -364,13 +360,7 @@ p <- ggplot(counts_df, aes(x = factor(region))) +
 
 # Convert ggplot object to plotly for interactive visualization
 ggplotly(p)
-
 ```
-
-```{r}
-
-```
-
 
 ```{r}
 ```
@@ -408,31 +398,45 @@ ggplotly(corr_matrix)
 ```
 
 
-#### Accessing Multicollinearity
-
-```{r}
-# Model with all predictors
-model_for_vif <- lm(child_marriage ~ area + region + education_level + health_insurance + ethnicity + wealth_index + current_contraceptive_use + awareness_hiv_aids + access_to_media, data = imputed_df)
-
-# Calculate VIF (A VIF value > 5 indicates high multicollinearity)
-vif_results <- vif(model_for_vif)
-print(vif_results)
-```
 
 #### Converting Categorical and Binary Variables to Factors
+
+```{r}
+# # Mapping for 'area'
+# area_labels <- c("Urban", "Rural")
+# names(area_labels) <- c("1", "2")
+# 
+# # Mapping for 'region'
+# region_labels <- c("Red River Delta", "Northern Midlands And Mountain", "North Central And Central Coastal", "Central Highlands", "South East", "Mekong River Delta")
+# names(region_labels) <- c("1", "2", "3", "4", "5", "6")
+# 
+# # Mapping for 'education_level'
+# education_level_labels <- c("None or Pre-Primary", "Primary", "Lower Primary", "Upper Primary", "Vocational High School", "University/College/Higher")
+# names(education_level_labels) <- c("0", "1", "2", "3", "4", "5") 
+# 
+# # Mapping for 'ethnicity'
+# ethnicity_labels <- c("Kinh and Hoa", "Tay, Thai, Muong, Nung", "Khmer", "Mong")  # Add or modify as per your dataset
+# names(ethnicity_labels) <- c("1", "2", "3", "4")  
+# 
+# # Mapping for 'wealth_index'
+# wealth_index_labels <- c("Poorest", "Poor", "Middle", "Rich", "Richest")
+# names(wealth_index_labels) <- c("1", "2", "3", "4", "5") 
+
+```
+
 
 ```{r}
 # Convert nominal and ordinal variables to factors
 imputed_df$area <- as.factor(imputed_df$area)
 imputed_df$region <- as.factor(imputed_df$region)
-imputed_df$education_level <- factor(imputed_df$education_level, ordered = TRUE)
+imputed_df$education_level <- factor(imputed_df$education_level, ordered = FALSE)
 imputed_df$ethnicity <- as.factor(imputed_df$ethnicity)
-imputed_df$wealth_index <- factor(imputed_df$wealth_index, ordered = TRUE)
+imputed_df$wealth_index <- factor(imputed_df$wealth_index, ordered = FALSE)
 
 # Binary variables are already in the correct format and can be used as is
 ```
 
-### Baseline Logistic Regression Model
+### Base Logistic Regression Model
 
 ```{r}
 # Baseline model for reference
@@ -442,85 +446,201 @@ baseline_model <- glm(child_marriage ~ area + education_level + wealth_index + h
 summary(baseline_model)
 ```
 
+#### Accessing Base Model's Multicollinearity
 
 ```{r}
-# Adding "Region" as Fixed Effect to baseline model
-model_with_region <- update(baseline_model, . ~ . + region)
+# Calculate VIF (A VIF value > 5 indicates high multicollinearity)
+base_vif_results <- vif(baseline_model)
+print(base_vif_results)
 
-summary(model_with_region)
+# Check if any VIF value is greater than a typical threshold, like 5 or 10.
+base_high_vif <- base_vif_results[base_vif_results > 5]
+print(base_high_vif)
 ```
 
+### Adding Fixed Effects to Base Model
 
 ```{r}
-# Adding "Ethnicity" and "Region" as Fixed Effects to baseline model
-model_with_ethnicity_and_region <- update(model_with_region, . ~ . + ethnicity)
+# Enhanced model with additional fixed effects
+enhanced_model <- glm(child_marriage ~ area + region + education_level + ethnicity + wealth_index + health_insurance + current_contraceptive_use + awareness_hiv_aids + access_to_media, 
+                      family = binomial(), 
+                      data = imputed_df)
 
-summary(model_with_ethnicity_and_region)
+# Summarize the new model with FEs
+summary(enhanced_model)
 ```
 
+#### Model with FEs' Multicollinearity
 
 ```{r}
-# Comparing AIC and BIC
-cat("AIC - Baseline without Fixed Effects:", AIC(baseline_model), "\n")
-cat("AIC - With Region:", AIC(model_with_region), "\n")
-cat("AIC - With Ethnicity and Region:", AIC(model_with_ethnicity_and_region), "\n")
+# Calculate VIF (A VIF value > 5 indicates high multicollinearity)
+FE_vif_results <- vif(enhanced_model)
+print(FE_vif_results)
 
-cat("BIC - Baseline without Fixed Effects:", BIC(baseline_model), "\n")
-cat("BIC - With Region:", BIC(model_with_region), "\n")
-cat("BIC - With Ethnicity and Region:", BIC(model_with_ethnicity_and_region), "\n")
+# Check if any VIF value is greater than a typical threshold, like 5.
+FE_high_vif <- FE_vif_results[FE_vif_results > 5]
+print(FE_high_vif)
 ```
 
-Lower AIC or BIC values indicate a better-fitting model
+No VIF is significant larger than 5. This suggests that the independent variables in my model with Fixed Effects do not suffer from severe multicollinearity. 
 
+#### Assessing AICs and BICs of Base Model vs Fixed Effects Model
 
 ```{r}
-# Basic diagnostic plots for the current model
-# Step 1: Open a graphics device to save your plot as a PNG image.
-# Specify the filename and path if you want to save it somewhere specific.
-#png("diagnostic_plots.png", width = 960, height = 960)
-
-# Step 2: Run your plotting commands.
-par(mfrow = c(2, 2))
-plot(model_with_ethnicity_and_region)
-
-# Step 3: Close the graphics device to save the plot.
-#dev.off()
+# Model comparison using AIC
+aic_base <- AIC(baseline_model)
+aic_enhanced <- AIC(enhanced_model)
+cat("AIC - Base Model:", aic_base, "\n")
+cat("AIC - Enhanced Model:", aic_enhanced, "\n")
 ```
+
+Additionally, the lower AIC for the model with two fixed effects compared to the baseline model suggests that adding these fixed effects improves the model's overall fit. This aligns with my theoretical justification for including region and ethnicity as relevant factors in predicting child marriage.
 
 ```{r}
-
+# Model comparison using BIC
+bic_base <- BIC(baseline_model)
+bic_enhanced <- BIC(enhanced_model)
+cat("BIC - Base Model:", bic_base, "\n")
+cat("BIC - Enhanced Model:", bic_enhanced, "\n")
 ```
 
-```{r}
-#ggsave("Distribution of Predicted Probabilities.png", plot = lmao, width = 8, height = 6, dpi = 300)
-
-```
-
-```{r}
-# CONSIDER REMOVING NON-SIGNIFICANT VARS FIRST (?)
-```
+Lower BIC values suggest that, despite the added complexity (more parameters), the model with both region and ethnicity provides a better overall fit to my data when adjusted for the number of predictors. This is a strong indication that these variables are meaningful in explaining the variance in child marriage occurrences in my dataset.
 
 
-```{r}
-# Adding the interaction term between education level and wealth index
-model_with_wealth_educ_interaction <- update(model_with_ethnicity_and_region, . ~ . + education_level:wealth_index)
-summary(model_with_wealth_educ_interaction)
-```
-
-Not moving forward with this interaction terms as the NAs indicate a level of multicollinearity or data sparsity.
-
-```{r}
-cat("AIC:", AIC(model_with_wealth_educ_interaction), "\nBIC:", BIC(model_with_wealth_educ_interaction), "\n")
-```
-
+### Model with Interaction Terms (Area:Wealth_Index)
 
 ```{r}
 # Adding the interaction term between education level and wealth index
-model_with_area_educ_interaction <- update(model_with_ethnicity_and_region, . ~ . + education_level:area)
-summary(model_with_area_educ_interaction)
+model_interaction <- update(enhanced_model, . ~ . + area:wealth_index)
+summary(model_interaction)
 ```
 
-Interaction terms are not significant. Need further investigation.
+
+```{r}
+cat("AIC (base):", AIC(baseline_model), "\nBIC (base):", BIC(baseline_model), "\n")
+cat("AIC (w/ interaction terms):", AIC(model_interaction), "\nBIC (w/ interaction terms):", BIC(model_interaction), "\n")
+```
+
+
+### Logistic Regression Models Comparison (Odd Ratios and 95% Confidence Intervals)
+
+```{r}
+# Function to add significance asterisks
+add_asterisks <- function(p_value) {
+  if (is.na(p_value)) {
+    return(NA)
+  } else if (p_value < 0.001) {
+    return("***")
+  } else if (p_value < 0.01) {
+    return("**")
+  } else if (p_value < 0.05) {
+    return("*")
+  } else {
+    return("")
+  }
+}
+```
+
+```{r}
+# Function to format confidence intervals as a string
+format_ci <- function(lower, upper) {
+  paste0("(", round(lower, 2), ", ", round(upper, 2), ")")
+}
+```
+
+```{r}
+# Tidy the baseline model with confidence intervals
+tidy_baseline <- tidy(baseline_model, conf.int = TRUE, exponentiate = TRUE)
+
+# Tidy the enhanced model with confidence intervals
+tidy_enhanced <- tidy(enhanced_model, conf.int = TRUE, exponentiate = TRUE)
+
+# Tidy the interaction model with confidence intervals
+tidy_interaction <- tidy(model_interaction, conf.int = TRUE, exponentiate = TRUE)
+```
+
+```{r}
+# Apply the function to each model's p.value
+tidy_baseline$asterisks <- sapply(tidy_baseline$p.value, add_asterisks)
+tidy_enhanced$asterisks <- sapply(tidy_enhanced$p.value, add_asterisks)
+tidy_interaction$asterisks <- sapply(tidy_interaction$p.value, add_asterisks)
+```
+
+
+```{r}
+# Create OR strings with asterisks and format CIs as a string
+tidy_baseline <- tidy_baseline %>%
+  mutate(
+    OR = ifelse(is.na(estimate), NA, paste0(round(estimate, 2), asterisks)),
+    CI = ifelse(is.na(conf.low) | is.na(conf.high), NA, format_ci(conf.low, conf.high))
+  )
+
+tidy_enhanced <- tidy_enhanced %>%
+  mutate(
+    OR = ifelse(is.na(estimate), NA, paste0(round(estimate, 2), asterisks)),
+    CI = ifelse(is.na(conf.low) | is.na(conf.high), NA, format_ci(conf.low, conf.high))
+  )
+
+tidy_interaction <- tidy_interaction %>%
+  mutate(
+    OR = ifelse(is.na(estimate), NA, paste0(round(estimate, 2), asterisks)),
+    CI = ifelse(is.na(conf.low) | is.na(conf.high), NA, format_ci(conf.low, conf.high))
+  )
+```
+
+
+```{r}
+# Add a 'Model' column to each tidied dataframe
+tidy_baseline <- tidy_baseline %>% mutate(Model = "Baseline")
+tidy_enhanced <- tidy_enhanced %>% mutate(Model = "Enhanced")
+tidy_interaction <- tidy_interaction %>% mutate(Model = "Interaction")
+
+# Combine and pivot the dataframes
+combined_results <- bind_rows(
+  tidy_baseline %>% select(term, OR, CI, Model),
+  tidy_enhanced %>% select(term, OR, CI, Model),
+  tidy_interaction %>% select(term, OR, CI, Model)
+) %>%
+  pivot_wider(names_from = Model, values_from = c(OR, CI))
+```
+
+
+```{r}
+# Replace NAs with "—"
+combined_results[is.na(combined_results)] <- "—"
+```
+
+
+```{r}
+# Reordering columns to have OR and CI next to each other for each model
+combined_results <- combined_results %>%
+  select(term, 
+         OR_Baseline, CI_Baseline, 
+         OR_Enhanced, CI_Enhanced, 
+         OR_Interaction, CI_Interaction)
+```
+
+
+```{r}
+# Print the final combined table
+print(combined_results)
+```
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
+
+```{r}
+```
+
 
 ```{r}
 ```
