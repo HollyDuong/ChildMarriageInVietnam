@@ -293,7 +293,7 @@ imputed_df <- imputed_df %>%
 
 ```{r}
 # Exporting female_df to a CSV file in the current working directory
-write.csv(imputed_df, "imputed_df.csv", row.names = FALSE)
+#write.csv(imputed_df, "imputed_df.csv", row.names = FALSE)
 ```
 
 ### EDA
@@ -584,12 +584,17 @@ model_interaction <- update(enhanced_model, . ~ . + area:wealth_index)
 summary(model_interaction)
 ```
 
+#### Assessing AICs and BICs of Fixed Effects Model vs Fixed Effects Model w/ Interaction Terms
 
 ```{r}
-cat("AIC (base):", AIC(baseline_model), "\nBIC (base):", BIC(baseline_model), "\n")
-cat("AIC (w/ interaction terms):", AIC(model_interaction), "\nBIC (w/ interaction terms):", BIC(model_interaction), "\n")
+cat("AIC (enhanced):", AIC(enhanced_model), "\nAIC (w/ interaction terms):", AIC(model_interaction), "\n")
+cat("BIC (enhanced):", BIC(enhanced_model), "\nBIC (w/ interaction terms):", BIC(model_interaction), "\n")
 ```
 
+- The AIC and BIC results for my two models – the `enhanced_model` and `model_interaction` – indicate that the simpler model (without interaction terms) has a better trade-off between model fit and complexity.
+- The AIC is lower for the enhanced_model compared to the `model_interaction`. This suggests that, despite possibly having a good fit, the addition of interaction terms to the `model_interaction` does not improve the model's performance enough to justify the added complexity. A lower AIC value is generally preferred, implying that the `enhanced_model` is a better model choice from an information criterion standpoint.
+- The BIC, like the AIC, is also lower for the `enhanced_model`. BIC, which includes a stricter penalty for the number of parameters, reinforces the conclusion drawn from the AIC: the additional complexity introduced by interaction terms does not lead to a proportional improvement in the model fit. BIC being more stringent, particularly in models with larger sample sizes and more parameters, suggests a strong preference for the simpler `enhanced_model`.
+- Both AIC and BIC results point towards the `enhanced_model` as a more optimal balance between goodness of fit and parsimony. This indicates that, while interaction terms add detail and complexity to the model, they might not be contributing significantly to explaining the variability in your dependent variable.
 
 ### Logistic Regression Models Comparison (Odd Ratios and 95% Confidence Intervals)
 
@@ -657,7 +662,6 @@ tidy_interaction <- tidy_interaction %>%
   )
 ```
 
-
 ```{r}
 # Add a 'Model' column to each tidied dataframe
 tidy_baseline <- tidy_baseline %>% mutate(Model = "Baseline")
@@ -673,12 +677,10 @@ combined_results <- bind_rows(
   pivot_wider(names_from = Model, values_from = c(OR, CI))
 ```
 
-
 ```{r}
 # Replace NAs with "—"
 combined_results[is.na(combined_results)] <- "—"
 ```
-
 
 ```{r}
 # Reordering columns to have OR and CI next to each other for each model
@@ -714,7 +716,7 @@ hoslem.test(model_interaction$y, fitted(model_interaction), g=10)
 A large p-value (>0.05) indicates a good fit, meaning that there's no significant difference between the observed and predicted values. Through each model, the p-value increases which suggests that our decision to include fixed effects and interaction terms are significant.
 
 
-#### Likelihood Ratio Test
+#### Likelihood Ratio Test (ANOVA)
 
 ```{r}
 # Baseline vs. Baseline + Fixed Effects
@@ -731,6 +733,7 @@ anova(enhanced_model, model_interaction, test="Chisq")
 
 Adding the interaction terms between area and wealth_index does not significantly improve the model fit compared to the Enhanced Model without interaction terms. This is indicated by the relatively high p-value and the smaller decrease in residual deviance.
 
+#### ROC Curve and AUC
 
 ```{r message=FALSE}
 # For each model
@@ -771,7 +774,198 @@ The Enhanced and Interaction Models only show marginal improvements in AUC compa
 Given the slight increases in AUC with added model complexity, consider the trade-offs. A simpler model might be preferable if it is easier to interpret and communicate, especially if the increase in predictive power is minimal. Personally, given this result, I think Enhanced Model might be a better-suited model overall.
 
 
+### Gut Check: Redo Analysis with Actual Data (no imputation)
+
+#### Recreate the dataframe with removed missing data
 
 ```{r}
+# No imputation -- Remove rows with any missing data from 'female_df'
+og_df <- na.omit(female_df)
+head(og_df)
 ```
+
+#### Recreate necessary variables
+
+```{r}
+# Convert "age at first marriage" into a binary variable to indicate child marriage
+# Child marriage is defined as marriage before the age of 18
+# The new binary variable "child_marriage" will have a value of 1 if the marriage occurred before age 18, and 0 otherwise
+og_df <- og_df %>%
+  mutate(child_marriage = ifelse(age_first_marriage < 18, 1, 0))
+```
+
+```{r}
+# Create a binary variable for child marriage under 16
+# The new variable "child_marriage_u16" will have a value of 1 if the marriage occurred before age 16, and 0 otherwise
+og_df <- og_df %>%
+  mutate(child_marriage_u16 = ifelse(age_first_marriage < 16, 1, 0))
+```
+
+```{r}
+# Move "child_marriage" and "child_marriage_u16" to the front of the dataframe
+og_df <- og_df %>%
+  select(child_marriage, child_marriage_u16, everything())
+```
+
+#### Converting Categorical and Binary Variables to Factors
+
+```{r}
+# Convert nominal and ordinal variables to factors
+og_df$area <- as.factor(og_df$area)
+og_df$region <- as.factor(og_df$region)
+og_df$education_level <- factor(og_df$education_level, ordered = FALSE)
+og_df$ethnicity <- as.factor(og_df$ethnicity)
+og_df$wealth_index <- factor(og_df$wealth_index, ordered = FALSE)
+
+# Binary variables are already in the correct format and can be used as is
+```
+
+#### Recreate the regression models without imputed data
+
+```{r}
+# Base model
+base_model_no_impute <- glm(child_marriage ~ area + education_level + wealth_index + health_insurance + current_contraceptive_use + awareness_hiv_aids + access_to_media, family = binomial(), data = og_df)
+
+# Summarize the base model
+summary(base_model_no_impute)
+```
+
+
+```{r}
+# Enhanced model with additional fixed effects
+enhanced_model_no_impute <- glm(child_marriage ~ area + region + education_level + ethnicity + wealth_index + health_insurance + current_contraceptive_use + awareness_hiv_aids + access_to_media, family = binomial(), data = og_df)
+
+# Summarize the new model with FEs
+summary(enhanced_model_no_impute)
+```
+
+
+#### Assessing AICs and BICs of Base Model vs Fixed Effects Model
+
+```{r}
+# Model comparison using AIC
+aic_base <- AIC(base_model_no_impute)
+aic_enhanced <- AIC(enhanced_model_no_impute)
+cat("AIC - Base Model:", aic_base, "\n")
+cat("AIC - Enhanced Model:", aic_enhanced, "\n")
+```
+
+Additionally, the lower AIC for the model with two fixed effects compared to the baseline model suggests that adding these fixed effects improves the model's overall fit. This aligns with my theoretical justification for including region and ethnicity as relevant factors in predicting child marriage.
+
+```{r}
+# Model comparison using BIC
+bic_base <- BIC(base_model_no_impute)
+bic_enhanced <- BIC(enhanced_model_no_impute)
+cat("BIC - Base Model:", bic_base, "\n")
+cat("BIC - Enhanced Model:", bic_enhanced, "\n")
+```
+
+Lower BIC values suggest that, despite the added complexity (more parameters), the model with both region and ethnicity provides a better overall fit to my data when adjusted for the number of predictors. This is a strong indication that these variables are meaningful in explaining the variance in child marriage occurrences in my dataset.
+
+
+### Model with Interaction Terms (Area:Wealth_Index)
+
+```{r}
+# Adding the interaction term between education level and wealth index
+interaction_model_no_impute <- update(enhanced_model_no_impute, . ~ . + area:wealth_index)
+summary(interaction_model_no_impute)
+```
+
+```{r}
+cat("AIC (enhanced):", AIC(enhanced_model_no_impute), "\nAIC (w/ interaction terms):", AIC(interaction_model_no_impute), "\n")
+cat("BIC (enhanced):", BIC(enhanced_model_no_impute), "\nBIC (w/ interaction terms):", BIC(interaction_model_no_impute), "\n")
+```
+- The AIC and BIC results for my two models – the `enhanced_model_no_impute` and `interaction_model_no_impute` – indicate that the simpler model (without interaction terms) has a better trade-off between model fit and complexity.
+- The AIC is lower for the enhanced_model_no_impute compared to the `interaction_model_no_impute`. This suggests that, despite possibly having a good fit, the addition of interaction terms to the `interaction_model_no_impute` does not improve the model's performance enough to justify the added complexity. A lower AIC value is generally preferred, implying that the `enhanced_model_no_impute` is a better model choice from an information criterion standpoint.
+- The BIC, like the AIC, is also lower for the `enhanced_model_no_impute`. BIC, which includes a stricter penalty for the number of parameters, reinforces the conclusion drawn from the AIC: the additional complexity introduced by interaction terms does not lead to a proportional improvement in the model fit. BIC being more stringent, particularly in models with larger sample sizes and more parameters, suggests a strong preference for the simpler `enhanced_model_no_impute`.
+- Both AIC and BIC results point towards the `enhanced_model_no_impute` as a more optimal balance between goodness of fit and parsimony. This indicates that, while interaction terms add detail and complexity to the model, they might not be contributing significantly to explaining the variability in your dependent variable.
+
+```{r}
+# VIFs check (A VIF value > 5 indicates high multicollinearity)
+# Base model
+base_no_impute_vif <- vif(base_model_no_impute)
+print(base_no_impute_vif)
+
+# Enhanced model
+enhanced_no_impute_vif <- vif(enhanced_model_no_impute)
+print(enhanced_no_impute_vif)
+
+# Interacton model
+interaction_no_impute_vif <- vif(interaction_model_no_impute)
+print(interaction_no_impute_vif)
+```
+
+- Most VIF values are just slightly above 1, which indicates no concerning multicollinearity in this model.
+- Except for `wealth_index` and `area:wealth_index`, their VIF values are significantly higher (around 2.17 and 2.16, respectively). These values suggest a considerable level of multicollinearity, which is often expected when including interaction terms in a model.
+- High multicollinearity in models, especially those with interaction terms, doesn't invalidate the model but does complicate the interpretation of specific coefficients. 
+
+
+#### Comparing Models With vs Without Imputed Data
+
+```{r}
+# Extracting data from the models
+extract_model_data <- function(model) {
+  model_summary <- summary(model)
+  coeffs <- model_summary$coefficients
+  data.frame(
+    Term = rownames(coeffs),
+    Estimate = sprintf("%.3f", coeffs[, "Estimate"]),
+    pValue = ifelse(coeffs[, "Pr(>|z|)"] < 0.001, 
+                    format(coeffs[, "Pr(>|z|)"], scientific = TRUE),
+                    sprintf("%.3f", coeffs[, "Pr(>|z|)"])),
+    Significance = sapply(coeffs[, "Pr(>|z|)"], add_asterisks)
+  )
+}
+```
+
+
+```{r}
+# Applying the function to each model
+base_impute_data <- extract_model_data(baseline_model)
+base_no_impute_data <- extract_model_data(base_model_no_impute)
+
+# Combine the data for comparison
+base_comparison_data <- merge(base_impute_data, base_no_impute_data, by = "Term", suffixes = c("_Impute", "_NoImpute"), sort = FALSE)
+
+# View the comparison
+print(base_comparison_data)
+```
+
+- Education and Wealth Index variables are consistent, robust and significant predictors of the outcome across both models.
+- For some variables like 'current contraceptive use', imputation significantly impacts its role in the model. It could indicate the missing data mechanism's influence.
+- Significance of Area: This variable's significance suggests geographical variation is an important factor, but its influence is reduced in the non-imputed model.
+- The overall patterns suggest that while some predictors are consistently influential, others are sensitive to how missing data is handled.
+
+
+```{r}
+# Applying the function to each model
+enhanced_impute_data <- extract_model_data(enhanced_model)
+enhanced_no_impute_data <- extract_model_data(enhanced_model_no_impute)
+
+# Combine the data for comparison
+enhanced_comparison_data <- merge(enhanced_impute_data, enhanced_no_impute_data, by = "Term", suffixes = c("_Impute", "_NoImpute"), sort = FALSE)
+
+# View the comparison
+print(enhanced_comparison_data)
+```
+
+- Education levels and ethnicity (specific categories) are robust across both models.
+- Certain variables like area, region, and wealth index are sensitive to imputation, suggesting that missing data in these areas could be informative.
+- The loss of significance in many variables in the non-imputed model suggests that the missing data may not be random and could be related to the variables' influence on the outcome.
+
+
+```{r}
+# Applying the function to each model
+interaction_impute_data <- extract_model_data(model_interaction)
+interaction_no_impute_data <- extract_model_data(interaction_model_no_impute)
+
+# Combine the data for comparison
+interaction_comparison_data <- merge(interaction_impute_data, interaction_no_impute_data, by = "Term", suffixes = c("_Impute", "_NoImpute"), sort = FALSE)
+
+# View the comparison
+print(interaction_comparison_data)
+```
+
+- The effects of imputation are most pronounced in geographical variables (area and region) and some interactions, indicating a potential non-random pattern in how missing data occurs in these variables.
+- Certain variables like higher education levels and some ethnicity categories maintain their predictive power regardless of missing data imputation, indicating a stronger and more consistent relationship with the outcome.
 
