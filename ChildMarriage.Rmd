@@ -3,10 +3,10 @@ title: "Child Marriage Phenomenon In Vietnam"
 author: "Holly Duong"
 date: "2024-02-29"
 output:
-  word_document: default
+  html_document: default
   pdf_document: default
   always_allow_html: true
-  html_document: default
+  word_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -31,6 +31,8 @@ library(ggpattern)
 library(tidyr)
 library(ResourceSelection)
 library(sf)
+library(arm)
+
 ```
 
 ### Setting up Data
@@ -47,7 +49,7 @@ head(female)
 
 ```{r}
 # Select the specified columns to create a new dataframe
-female_df <- select(female, WAGEM, MSTATUS, HH6, HH7, welevel, insurance, ethnicity, windex5, CP2, HA1, MT4, MT9, MT11)
+female_df <- dplyr::select(female, WAGEM, MSTATUS, HH6, HH7, welevel, insurance, ethnicity, windex5, CP2, HA1, MT4, MT9, MT11)
 
 # View the first few rows of the new dataframe
 summary(female_df)
@@ -123,20 +125,34 @@ summary(female_df)
 # This provides a more comprehensive measure of media access
 female_df <- female_df %>%
   mutate(access_to_media = ifelse(used_computer_tablet == 1 | used_internet == 1 | owns_mobile_phone == 1, 1, 0))
-
-# In later analysis, use access_to_media instead of the 3 separate variables
 ```
 
 ```{r}
-# Exporting female_df to a CSV file in the current working directory
-#write.csv(female_df, "female_df.csv", row.names = FALSE)
+# In later analysis, use access_to_media instead of the 3 separate variables
+female_df <- female_df %>%
+  dplyr::select(-used_computer_tablet, -used_internet, -owns_mobile_phone)
 ```
+
+
+```{r}
+# Removing rows where 'age_first_marriage' is NA in female_df
+# This is because these values represent people who are not yet married, which is not the focus of the study
+married_df <- female_df[!is.na(female_df$age_first_marriage), ]
+summary(married_df)
+```
+
+
+```{r}
+# Exporting female_df to a CSV file in the current working directory
+#write.csv(married_df, "married_df.csv", row.names = FALSE)
+```
+
 
 ### Distributions of Data
 
 ```{r}
 # Histogram for 'Age at First Marriage'
-afm_hist <- ggplot(female_df, aes(x = age_first_marriage)) +
+afm_hist <- ggplot(married_df, aes(x = age_first_marriage)) +
   geom_histogram(fill = "#F7C0C8", color = "black") +
   theme_minimal() +
   ggtitle("Histogram of Age at First Marriage") +
@@ -151,23 +167,13 @@ print(afm_hist)
 
 ```{r}
 # Before that, let's double check the count of missing values by column
-count_missing <- sapply(female_df, function(x) sum(is.na(x)))
+count_missing <- sapply(married_df, function(x) sum(is.na(x)))
 print(count_missing)
 ```
 
 ```{r}
 # Make a copy of female_df for imputation
-imputed_df <- female_df
-```
-
-```{r}
-# Handle missing values in 'Age at First Marriage'
-
-# Calculate the median value for 'Age at First Marriage', excluding NA values
-median_age_first_marriage <- median(imputed_df$age_first_marriage, na.rm = TRUE)
-
-# Impute missing values in 'Age at First Marriage' with the median value
-imputed_df$age_first_marriage[is.na(imputed_df$age_first_marriage)] <- median_age_first_marriage
+imputed_df <- married_df
 ```
 
 ```{r}
@@ -195,22 +201,16 @@ imputed_df <- mutate(imputed_df, marital_status = ifelse(is.na(marital_status), 
 # should be imputed with the mode since it represents the most frequent category (either 0 or 1).
 
 # Calculate the mode for each binary variable
-mode_used_internet <- getMode(imputed_df$used_internet)
 mode_current_contraceptive_use <- getMode(imputed_df$current_contraceptive_use)
 mode_health_insurance <- getMode(imputed_df$health_insurance)
 mode_awareness_hiv_aids <- getMode(imputed_df$awareness_hiv_aids)
-mode_used_computer_tablet <- getMode(imputed_df$used_computer_tablet)
-mode_owns_mobile_phone <- getMode(imputed_df$owns_mobile_phone)
 mode_access_to_media <- getMode(imputed_df$access_to_media)
 
 # Impute missing values for binary variables
 imputed_df <- mutate(imputed_df,
-  used_internet = ifelse(is.na(used_internet), mode_used_internet, used_internet),
   current_contraceptive_use = ifelse(is.na(current_contraceptive_use), mode_current_contraceptive_use, current_contraceptive_use),
   health_insurance = ifelse(is.na(health_insurance), mode_health_insurance, health_insurance),
   awareness_hiv_aids = ifelse(is.na(awareness_hiv_aids), mode_awareness_hiv_aids, awareness_hiv_aids),
-  used_computer_tablet = ifelse(is.na(used_computer_tablet), mode_used_computer_tablet, used_computer_tablet),
-  owns_mobile_phone = ifelse(is.na(owns_mobile_phone), mode_owns_mobile_phone, owns_mobile_phone),
   access_to_media = ifelse(is.na(access_to_media), mode_access_to_media, access_to_media)
 )
 
@@ -240,29 +240,51 @@ print(count_imputation)
 ### Visualization Comparing Before vs. After Imputation
 
 ```{r}
-# Histogram for 'age_first_marriage' before imputation
-afm_0 <- ggplot(female_df, aes(x = age_first_marriage)) + 
+# Histogram for 'ethnicity' before imputation
+ethnic <- ggplot(married_df, aes(x = ethnicity)) + 
   geom_histogram(fill = "#F7C0C8", color = "black", bins = 30) +
   theme_light() +
   ggtitle("Before Imputation") +
-  xlab("Age at First Marriage") +
+  xlab("Ethnicity") +
   ylab("Frequency")
 
-# Histogram for 'age_first_marriage' after imputation
-afm_imputed <- ggplot(imputed_df, aes(x = age_first_marriage)) + 
+# Histogram for 'ethnicity' after imputation
+ethnic_imputed <- ggplot(imputed_df, aes(x = ethnicity)) + 
   geom_histogram(fill = "#E83853", color = "black", bins = 30) +
   theme_light() +
   ggtitle("After Imputation") +
-  xlab("Age at First Marriage") +
+  xlab("Ethnicity") +
   ylab("Frequency")
 
 # Arrange the two plots side by side
-grid.arrange(afm_0, afm_imputed, ncol = 2)
+grid.arrange(ethnic, ethnic_imputed, ncol = 2)
 ```
 
 ```{r}
+# Histogram for 'education_level' before imputation
+educ <- ggplot(married_df, aes(x = education_level)) + 
+  geom_histogram(fill = "#F7C0C8", color = "black", bins = 30) +
+  theme_light() +
+  ggtitle("Before Imputation") +
+  xlab("Education Level") +
+  ylab("Frequency")
+
+# Histogram for 'education_level' after imputation
+educ_imputed <- ggplot(imputed_df, aes(x = education_level)) + 
+  geom_histogram(fill = "#E83853", color = "black", bins = 30) +
+  theme_light() +
+  ggtitle("After Imputation") +
+  xlab("Education Level") +
+  ylab("Frequency")
+
+# Arrange the two plots side by side
+grid.arrange(educ, educ_imputed, ncol = 2)
+```
+
+
+```{r}
 # Arrange the two plots side by side and capture the layout as a grob
-combined_plots <- arrangeGrob(afm_0, afm_imputed, ncol = 2)
+#combined_plots <- arrangeGrob(afm_0, afm_imputed, ncol = 2)
 
 # Now, use ggsave to save the combined plot
 #ggsave("combined_age_first_marriage.png", plot = combined_plots, width = 10, height = 5)
@@ -288,13 +310,14 @@ imputed_df <- imputed_df %>%
 ```{r}
 # Move "child_marriage" and "child_marriage_u16" to the front of the dataframe
 imputed_df <- imputed_df %>%
-  select(child_marriage, child_marriage_u16, everything())
+  dplyr::select(child_marriage, child_marriage_u16, everything())
 ```
 
 ```{r}
 # Exporting female_df to a CSV file in the current working directory
 #write.csv(imputed_df, "imputed_df.csv", row.names = FALSE)
 ```
+
 
 ### EDA
 
@@ -404,57 +427,55 @@ print(mapvn)
 #### Marital Status Among Female Respondants by Region in Vietnam
 
 ```{r}
-# Calculate total observations
-total_obs <- nrow(imputed_df)
+total_child_marriages_u18 <- sum(imputed_df$child_marriage == 1)
 
-# Aggregate counts for each category by region without altering the original 'region' field
-counts_df <- aggregate(cbind(ever_married = imputed_df$marital_status %in% c(1, 2), 
-                             married_u18 = imputed_df$child_marriage == 1, 
+# Aggregate counts for each category by region
+counts_df <- aggregate(cbind(married_u18 = imputed_df$child_marriage == 1, 
                              married_u16 = imputed_df$child_marriage_u16 == 1) ~ region, 
                        data = imputed_df, 
                        FUN = sum)
 
-# Convert counts to percentages
-counts_df$ever_married <- (counts_df$ever_married / total_obs) * 100
-counts_df$married_u18 <- (counts_df$married_u18 / total_obs) * 100
-counts_df$married_u16 <- (counts_df$married_u16 / total_obs) * 100
+# Convert counts to percentages based on total child marriages under 18
+counts_df$married_u18 <- (counts_df$married_u18 / total_child_marriages_u18) * 100
+counts_df$married_u16 <- (counts_df$married_u16 / total_child_marriages_u18) * 100
 ```
 
 
 ```{r}
 p <- ggplot(counts_df, aes(x = factor(region))) +
-  geom_bar(aes(y = ever_married, fill = "Ever married"), stat = "identity") +
-  geom_bar(aes(y = married_u18, fill = "Married before 18 years old"), stat = "identity") +
-  geom_bar(aes(y = married_u16, fill = "Married before 16 years old"), stat = "identity") +
-  # Adding text labels for ever_married
-  geom_text(aes(y = ever_married, label = sprintf("%.1f%%", ever_married)), 
-            position = position_stack(vjust = 1.025), 
-            size = 4, color = "black") +
+  geom_bar(aes(y = married_u18, fill = "Married before 18 years old"), stat = "identity", width = 0.5) +
+  geom_bar(aes(y = married_u16, fill = "Married before 16 years old"), stat = "identity", width = 0.5) +
+  
   # Adding text labels for married_u18
   geom_text(aes(y = married_u18, label = sprintf("%.1f%%", married_u18)), 
-            position = position_stack(vjust = 1.05), 
+            position = position_stack(vjust = 1.03), 
             size = 4, color = "black") +
   # Adding text labels for married_u16
   geom_text(aes(y = married_u16, label = sprintf("%.1f%%", married_u16)), 
-            position = position_stack(vjust = 1.1), 
+            position = position_stack(vjust = 1.05), 
             size = 4, color = "black") +
-  scale_fill_manual(values = c("Ever married" = "#FBE1E5", 
-                               "Married before 18 years old" = "#EF7D8D", 
+  
+  scale_fill_manual(values = c("Married before 18 years old" = "#EF7D8D", 
                                "Married before 16 years old" = "#B20016"),
                     name = "Marital Status") +
-  labs(x = "Region", y = "Percentage", title = "Marital Status Among Female Respondants by Region") +
+  labs(x = "Region", y = "Percentage", title = "Marital Status Among Female Respondents by Region", element_text(size = 14)) +
   theme_minimal() +
-  theme(plot.margin = margin(t = 10, r = 10, b = 10, l = 10, unit = "mm"), 
-        axis.text.x = element_text(angle = 45, hjust = 1), 
-        legend.position = "right") +
+  theme(plot.title = element_text(hjust = 0.5, size = 18),
+        plot.margin = margin(t = 10, r = 10, b = 10, l = 10, unit = "mm"), 
+        axis.text.x = element_text(size = 14, angle = 45, hjust = 1), 
+        legend.position = c(0.85,0.8),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(size = 14)) +
   scale_x_discrete(labels = c("1" = "Red River Delta", "2" = "Northern Midlands And Mountain", 
                               "3" = "North Central And Central Coastal", "4" = "Central Highlands", 
                               "5" = "South East", "6" = "Mekong River Delta"))
 
-# Convert ggplot object to plotly for interactive visualization
-ggplotly(p)
+print(p)
 ```
 
+```{r}
+#ggsave("marital_status.png", plot = p, width = 10, height = 5)
+```
 
 
 ### Preparing for Regression Analysis
@@ -489,10 +510,12 @@ corr_matrix <- ggplot(melted_cor_matrix, aes(Var1, Var2, fill = value)) +
 ggplotly(corr_matrix)
 ```
 
+```{r}
+#write.csv(imputed_df, "imputed_df.csv", row.names = FALSE)
+```
 
 
 #### Converting Categorical and Binary Variables to Factors
-
 
 ```{r}
 # Convert nominal and ordinal variables to factors
@@ -505,7 +528,11 @@ imputed_df$wealth_index <- factor(imputed_df$wealth_index, ordered = FALSE)
 # Binary variables are already in the correct format and can be used as is
 ```
 
-### Base Logistic Regression Model
+
+
+### Logistic Regression Analysis
+
+### Model 1 - Base Logistic Regression Model
 
 ```{r}
 # Baseline model for reference
@@ -515,19 +542,7 @@ baseline_model <- glm(child_marriage ~ area + education_level + wealth_index + h
 summary(baseline_model)
 ```
 
-#### Accessing Base Model's Multicollinearity
-
-```{r}
-# Calculate VIF (A VIF value > 5 indicates high multicollinearity)
-base_vif_results <- vif(baseline_model)
-print(base_vif_results)
-
-# Check if any VIF value is greater than a typical threshold, like 5 or 10.
-base_high_vif <- base_vif_results[base_vif_results > 5]
-print(base_high_vif)
-```
-
-### Adding Fixed Effects to Base Model
+### Model 2 - Adding Fixed Effects to Base Model
 
 ```{r}
 # Enhanced model with additional fixed effects
@@ -539,62 +554,14 @@ enhanced_model <- glm(child_marriage ~ area + region + education_level + ethnici
 summary(enhanced_model)
 ```
 
-#### Model with FEs' Multicollinearity
+### Model 3 - Model with Interaction Terms (Ethnicity:Access_to_media)
 
 ```{r}
-# Calculate VIF (A VIF value > 5 indicates high multicollinearity)
-FE_vif_results <- vif(enhanced_model)
-print(FE_vif_results)
-
-# Check if any VIF value is greater than a typical threshold, like 5.
-FE_high_vif <- FE_vif_results[FE_vif_results > 5]
-print(FE_high_vif)
-```
-
-No VIF is significant larger than 5. This suggests that the independent variables in my model with Fixed Effects do not suffer from severe multicollinearity. 
-
-#### Assessing AICs and BICs of Base Model vs Fixed Effects Model
-
-```{r}
-# Model comparison using AIC
-aic_base <- AIC(baseline_model)
-aic_enhanced <- AIC(enhanced_model)
-cat("AIC - Base Model:", aic_base, "\n")
-cat("AIC - Enhanced Model:", aic_enhanced, "\n")
-```
-
-Additionally, the lower AIC for the model with two fixed effects compared to the baseline model suggests that adding these fixed effects improves the model's overall fit. This aligns with my theoretical justification for including region and ethnicity as relevant factors in predicting child marriage.
-
-```{r}
-# Model comparison using BIC
-bic_base <- BIC(baseline_model)
-bic_enhanced <- BIC(enhanced_model)
-cat("BIC - Base Model:", bic_base, "\n")
-cat("BIC - Enhanced Model:", bic_enhanced, "\n")
-```
-
-Lower BIC values suggest that, despite the added complexity (more parameters), the model with both region and ethnicity provides a better overall fit to my data when adjusted for the number of predictors. This is a strong indication that these variables are meaningful in explaining the variance in child marriage occurrences in my dataset.
-
-
-### Model with Interaction Terms (Area:Wealth_Index)
-
-```{r}
-# Adding the interaction term between education level and wealth index
-model_interaction <- update(enhanced_model, . ~ . + area:wealth_index)
+# Adding the interaction term between ethnicity and access_to_media
+model_interaction <- update(enhanced_model, . ~ . + ethnicity:access_to_media)
 summary(model_interaction)
 ```
 
-#### Assessing AICs and BICs of Fixed Effects Model vs Fixed Effects Model w/ Interaction Terms
-
-```{r}
-cat("AIC (enhanced):", AIC(enhanced_model), "\nAIC (w/ interaction terms):", AIC(model_interaction), "\n")
-cat("BIC (enhanced):", BIC(enhanced_model), "\nBIC (w/ interaction terms):", BIC(model_interaction), "\n")
-```
-
-- The AIC and BIC results for my two models – the `enhanced_model` and `model_interaction` – indicate that the simpler model (without interaction terms) has a better trade-off between model fit and complexity.
-- The AIC is lower for the enhanced_model compared to the `model_interaction`. This suggests that, despite possibly having a good fit, the addition of interaction terms to the `model_interaction` does not improve the model's performance enough to justify the added complexity. A lower AIC value is generally preferred, implying that the `enhanced_model` is a better model choice from an information criterion standpoint.
-- The BIC, like the AIC, is also lower for the `enhanced_model`. BIC, which includes a stricter penalty for the number of parameters, reinforces the conclusion drawn from the AIC: the additional complexity introduced by interaction terms does not lead to a proportional improvement in the model fit. BIC being more stringent, particularly in models with larger sample sizes and more parameters, suggests a strong preference for the simpler `enhanced_model`.
-- Both AIC and BIC results point towards the `enhanced_model` as a more optimal balance between goodness of fit and parsimony. This indicates that, while interaction terms add detail and complexity to the model, they might not be contributing significantly to explaining the variability in your dependent variable.
 
 ### Logistic Regression Models Comparison (Odd Ratios and 95% Confidence Intervals)
 
@@ -640,7 +607,6 @@ tidy_enhanced$asterisks <- sapply(tidy_enhanced$p.value, add_asterisks)
 tidy_interaction$asterisks <- sapply(tidy_interaction$p.value, add_asterisks)
 ```
 
-
 ```{r}
 # Create OR strings with asterisks and format CIs as a string
 tidy_baseline <- tidy_baseline %>%
@@ -664,15 +630,15 @@ tidy_interaction <- tidy_interaction %>%
 
 ```{r}
 # Add a 'Model' column to each tidied dataframe
-tidy_baseline <- tidy_baseline %>% mutate(Model = "Baseline")
-tidy_enhanced <- tidy_enhanced %>% mutate(Model = "Enhanced")
-tidy_interaction <- tidy_interaction %>% mutate(Model = "Interaction")
+tidy_baseline <- tidy_baseline %>% mutate(Model = "Model_1")
+tidy_enhanced <- tidy_enhanced %>% mutate(Model = "Model_2")
+tidy_interaction <- tidy_interaction %>% mutate(Model = "Model_3")
 
 # Combine and pivot the dataframes
 combined_results <- bind_rows(
-  tidy_baseline %>% select(term, OR, CI, Model),
-  tidy_enhanced %>% select(term, OR, CI, Model),
-  tidy_interaction %>% select(term, OR, CI, Model)
+  tidy_baseline %>% dplyr::select(term, OR, CI, Model),
+  tidy_enhanced %>% dplyr::select(term, OR, CI, Model),
+  tidy_interaction %>% dplyr::select(term, OR, CI, Model)
 ) %>%
   pivot_wider(names_from = Model, values_from = c(OR, CI))
 ```
@@ -685,12 +651,11 @@ combined_results[is.na(combined_results)] <- "—"
 ```{r}
 # Reordering columns to have OR and CI next to each other for each model
 combined_results <- combined_results %>%
-  select(term, 
-         OR_Baseline, CI_Baseline, 
-         OR_Enhanced, CI_Enhanced, 
-         OR_Interaction, CI_Interaction)
+  dplyr::select(term, 
+         OR_Model_1, CI_Model_1, 
+         OR_Model_2, CI_Model_2, 
+         OR_Model_3, CI_Model_3)
 ```
-
 
 ```{r}
 # Print the final combined table
@@ -700,91 +665,177 @@ print(combined_results)
 
 ### Models Validation
 
+#### Likelihood Ratio Test (LRT)
+
+```{r}
+# Model 1 vs. Model 2
+anova(baseline_model, enhanced_model, test="Chisq")
+```
+
+The Model 2 provides a significantly better fit to the data compared to the Model 1, as indicated by the large decrease in residual deviance and the very small p-value (< 2.2e-16).
+
+```{r}
+# Model 1 vs. Model 3
+anova(baseline_model, model_interaction, test="Chisq")
+```
+
+The Model 3 provides a significantly better fit to the data compared to the Model 1, as indicated by the large decrease in residual deviance and the very small p-value (< 2.2e-16).
+
+```{r}
+# Model 2 vs. Model 3
+anova(enhanced_model, model_interaction, test="Chisq")
+```
+
+The p-value is extremely small (4.401e-06), far below the common significance level of 0.05. This means the difference in fit between the two models is statistically significant.
+
+Adding the interaction terms between `ethnicity` and `access_to_media` to Model 3 improved the model fit compared to the Model 2 without interaction terms. This indicates that the relationship between ethnicity and child marriage is significantly affected by access to media.
+
+Based on this analysis, Model 2 would be preferred over Model 1 for understanding or predicting child marriage, as it accounts for the interaction effect that is significant in your data.
+
+
+#### ROC Curve and AUC
+
+```{r message=FALSE, warning=FALSE}
+invisible(plot(roc(imputed_df$child_marriage,
+                   fitted(baseline_model)),
+               col = "red",
+               main = "ROC Curve: \nModel 1 (red) vs. Model 2 (green) vs. Model 3 (blue)"))
+
+invisible(plot(roc(imputed_df$child_marriage,
+                   fitted(enhanced_model)),
+               col = "green",
+               add = T))
+
+invisible(plot(roc(imputed_df$child_marriage,
+                   fitted(model_interaction)),
+               print.auc = T,
+               col = "blue",
+               add = T))
+
+```
+
+```{r message=FALSE}
+# For each model
+roc_response_model_1 <- roc(imputed_df$child_marriage, fitted(baseline_model))
+auc_model_1 <- auc(roc_response_model_1)
+
+roc_response_model_2 <- roc(imputed_df$child_marriage, fitted(enhanced_model))
+auc_model_2 <- auc(roc_response_model_2)
+
+roc_response_model_3 <- roc(imputed_df$child_marriage, fitted(model_interaction))
+auc_model_3 <- auc(roc_response_model_3)
+
+# Compare AUC values
+print(paste("AUC Model 1:", auc_model_1))
+print(paste("AUC Model 2:", auc_model_2))
+print(paste("AUC Model 3:", auc_model_3))
+```
+
+1. Model 1 (AUC: 0.7723):
+
+An AUC of 0.5 represents a model with no discriminative ability (akin to random guessing), while an AUC of 1.0 represents perfect discrimination. So, my model is performing substantially better than random guessing.
+
+The AUC of 0.7 indicates that the Model 1 has good discriminative ability. In other words, it is capable of distinguishing between cases and controls with a high degree of accuracy.
+
+2. Model 2 (AUC: 0.7868):
+
+This model shows a slight improvement in AUC over the Model 1. The increase suggests that the additional variables (or adjustments) I made in the Model 2 contribute positively to its ability to differentiate between cases and controls.
+The difference in AUC between the Model 1 and Model 2, while modest, is still meaningful, especially in practical, real-world contexts.
+
+3. Model 3 (AUC: 0.7896):
+
+The Model 3 shows a very slight improvement in AUC over the Model 2. This indicates that adding interaction terms provides a marginal improvement in the model's discriminatory power.
+However, the improvement is very minimal, which aligns with my earlier findings that the interaction terms did not significantly improve the model fit.
+
+4. Overall:
+
+All models demonstrate good ability to distinguish between cases and controls. An AUC greater than 0.7 is generally considered acceptable, and my models are above 0.7 and close to 0.8.
+The Model 2 and Model 3 only show marginal improvements in AUC compared to the Model 1. This suggests that while the additional complexity (more variables and interaction terms) does contribute slightly to model performance, the gains are not substantial.
+
+
+#### Residuals Plot
+
+```{r message=FALSE, warning=FALSE}
+binnedplot(fitted(model_interaction),
+           residuals(model_interaction, type = "response"),
+           nclass = NULL,
+           xlab = "Expected Values",
+           ylab = "Average Residuals",
+           main = "Binned Residual Plot",
+           cex.pts = 1,
+           col.int = "gray")
+```
+
 #### Hosmer-Lemeshow Test
 
 ```{r}
-# 1. Hosmer-Lemeshow Test for the Baseline Model
+# 1. Hosmer-Lemeshow Test for the Model 1
 hoslem.test(baseline_model$y, fitted(baseline_model), g=10)
 
-# 2. Hosmer-Lemeshow Test for the Enhanced Model (Baseline + Fixed Effects)
+# 2. Hosmer-Lemeshow Test for the Model 2 (Baseline + Fixed Effects)
 hoslem.test(enhanced_model$y, fitted(enhanced_model), g=10)
 
-# 3. Hosmer-Lemeshow Test for the Interaction Model (Baseline + Fixed Effects + Interaction Terms)
+# 3. Hosmer-Lemeshow Test for the Model 3 (Baseline + Fixed Effects + Interaction Terms)
 hoslem.test(model_interaction$y, fitted(model_interaction), g=10)
 ```
 
 A large p-value (>0.05) indicates a good fit, meaning that there's no significant difference between the observed and predicted values. Through each model, the p-value increases which suggests that our decision to include fixed effects and interaction terms are significant.
 
 
-#### Likelihood Ratio Test (ANOVA)
+#### Accessing Multicollinearity (VIF)
 
 ```{r}
-# Baseline vs. Baseline + Fixed Effects
-anova(baseline_model, enhanced_model, test="Chisq")
+# VIFs check (A VIF value > 5 indicates high multicollinearity)
+# Base model
+model_1_vif <- vif(baseline_model)
+print(model_1_vif)
+
+# Enhanced model
+model_2_vif <- vif(enhanced_model)
+print(model_2_vif)
+
+# Interacton model
+model_3_vif <- vif(model_interaction)
+print(model_3_vif)
 ```
 
-The Enhanced Model provides a significantly better fit to the data compared to the Baseline Model, as indicated by the large decrease in residual deviance and the very small p-value (< 2.2e-16).
+- Model 1 has the least concern with multicollinearity.
+- Model 2 introduces `region` and `ethnicity`, with a mild increase in multicollinearity, but not at alarming levels.
+- Model 3 exhibits more noticeable multicollinearity, particularly with the `ethnicity` variable and its interaction with `access_to_media`; their VIF values are significantly higher (around 2.82 and 2.74, respectively). Although these values are below 5, the increase is substantial compared to the previous models and could start to affect the reliability and interpretability of the regression coefficients for these variables.
+- High multicollinearity in models, especially those with interaction terms, doesn't invalidate the model but does complicate the interpretation of specific coefficients.
 
+
+#### Assessing AIC and BIC
 
 ```{r}
-# Baseline + Fixed Effects vs. Baseline + Fixed Effects + Interaction Terms
-anova(enhanced_model, model_interaction, test="Chisq")
+# Create a data frame to hold AIC and BIC values
+aic_bic_comparison <- data.frame(
+    Model = c("Model 1", "Model 2", "Model 3"),
+    AIC = c(AIC(baseline_model), AIC(enhanced_model), AIC(model_interaction)),
+    BIC = c(BIC(baseline_model), BIC(enhanced_model), BIC(model_interaction))
+)
+
+# Print the table
+print(aic_bic_comparison)
 ```
 
-Adding the interaction terms between area and wealth_index does not significantly improve the model fit compared to the Enhanced Model without interaction terms. This is indicated by the relatively high p-value and the smaller decrease in residual deviance.
-
-#### ROC Curve and AUC
-
-```{r message=FALSE}
-# For each model
-roc_response_baseline <- roc(imputed_df$child_marriage, fitted(baseline_model))
-auc_baseline <- auc(roc_response_baseline)
-
-roc_response_enhanced <- roc(imputed_df$child_marriage, fitted(enhanced_model))
-auc_enhanced <- auc(roc_response_enhanced)
-
-roc_response_interaction <- roc(imputed_df$child_marriage, fitted(model_interaction))
-auc_interaction <- auc(roc_response_interaction)
-
-# Compare AUC values
-print(paste("AUC Baseline Model:", auc_baseline))
-print(paste("AUC Enhanced Model:", auc_enhanced))
-print(paste("AUC Interaction Model:", auc_interaction))
-```
-
-1. Baseline Model (AUC: 0.7945):
-
-The AUC value is close to 0.8, which indicates that the Baseline Model has good discriminative ability. In other words, it is capable of distinguishing between cases and controls with a high degree of accuracy.
-An AUC of 0.5 represents a model with no discriminative ability (akin to random guessing), while an AUC of 1.0 represents perfect discrimination. So, my model is performing substantially better than random guessing.
-
-2. Enhanced Model (AUC: 0.8093):
-
-This model shows a slight improvement in AUC over the Baseline Model. The increase suggests that the additional variables (or adjustments) you made in the Enhanced Model contribute positively to its ability to differentiate between cases and controls.
-The difference in AUC between the Baseline and Enhanced models, while modest, is still meaningful, especially in practical, real-world contexts.
-
-3. Interaction Model (AUC: 0.8099):
-
-The Interaction Model shows a very slight improvement in AUC over the Enhanced Model. This indicates that adding interaction terms provides a marginal improvement in the model's discriminatory power.
-However, the improvement is very minimal, which aligns with my earlier findings that the interaction terms did not significantly improve the model fit.
-
-4. Overall:
-
-All models demonstrate good ability to distinguish between cases and controls. An AUC greater than 0.7 is generally considered acceptable, and my models are around or above 0.8.
-The Enhanced and Interaction Models only show marginal improvements in AUC compared to the Baseline Model. This suggests that while the additional complexity (more variables and interaction terms) does contribute slightly to model performance, the gains are not substantial.
-Given the slight increases in AUC with added model complexity, consider the trade-offs. A simpler model might be preferable if it is easier to interpret and communicate, especially if the increase in predictive power is minimal. Personally, given this result, I think Enhanced Model might be a better-suited model overall.
+Model 3 has the lowest AIC value of all, indicating that it might be the best model among the three in terms of balancing fit and complexity according to AIC. However, its BIC is very slightly lower than that of Model 2, making it almost equivalent to Model 2 in terms of BIC. This small difference in BIC suggests that Model 3 and Model 2 have similar levels of complexity-adjusted fit.
 
 
-### Gut Check: Redo Analysis with Actual Data (no imputation)
 
-#### Recreate the dataframe with removed missing data
+## Conservative Approach: Redo Analysis with Actual Data (No Imputation)
+
+### Data Prep
+
+#### Recreate DataFrames with Removed NAs
 
 ```{r}
 # No imputation -- Remove rows with any missing data from 'female_df'
-og_df <- na.omit(female_df)
-head(og_df)
+og_df <- na.omit(married_df)
+print(og_df)
 ```
 
-#### Recreate necessary variables
+#### Recreate Necessary Variables
 
 ```{r}
 # Convert "age at first marriage" into a binary variable to indicate child marriage
@@ -804,7 +855,7 @@ og_df <- og_df %>%
 ```{r}
 # Move "child_marriage" and "child_marriage_u16" to the front of the dataframe
 og_df <- og_df %>%
-  select(child_marriage, child_marriage_u16, everything())
+  dplyr::select(child_marriage, child_marriage_u16, everything())
 ```
 
 #### Converting Categorical and Binary Variables to Factors
@@ -820,7 +871,14 @@ og_df$wealth_index <- factor(og_df$wealth_index, ordered = FALSE)
 # Binary variables are already in the correct format and can be used as is
 ```
 
-#### Recreate the regression models without imputed data
+```{r}
+#write.csv(og_df, "og_df.csv", row.names = FALSE)
+```
+
+
+### Recreate Logistic Regression Models Without Imputed Data
+
+#### Model 1: Base Model
 
 ```{r}
 # Base model
@@ -830,6 +888,7 @@ base_model_no_impute <- glm(child_marriage ~ area + education_level + wealth_ind
 summary(base_model_no_impute)
 ```
 
+#### Model 2: Base Model with Fixed Effects
 
 ```{r}
 # Enhanced model with additional fixed effects
@@ -840,67 +899,16 @@ summary(enhanced_model_no_impute)
 ```
 
 
-#### Assessing AICs and BICs of Base Model vs Fixed Effects Model
-
-```{r}
-# Model comparison using AIC
-aic_base <- AIC(base_model_no_impute)
-aic_enhanced <- AIC(enhanced_model_no_impute)
-cat("AIC - Base Model:", aic_base, "\n")
-cat("AIC - Enhanced Model:", aic_enhanced, "\n")
-```
-
-Additionally, the lower AIC for the model with two fixed effects compared to the baseline model suggests that adding these fixed effects improves the model's overall fit. This aligns with my theoretical justification for including region and ethnicity as relevant factors in predicting child marriage.
-
-```{r}
-# Model comparison using BIC
-bic_base <- BIC(base_model_no_impute)
-bic_enhanced <- BIC(enhanced_model_no_impute)
-cat("BIC - Base Model:", bic_base, "\n")
-cat("BIC - Enhanced Model:", bic_enhanced, "\n")
-```
-
-Lower BIC values suggest that, despite the added complexity (more parameters), the model with both region and ethnicity provides a better overall fit to my data when adjusted for the number of predictors. This is a strong indication that these variables are meaningful in explaining the variance in child marriage occurrences in my dataset.
-
-
-### Model with Interaction Terms (Area:Wealth_Index)
+#### Model 3: Base Model with Fixed Effects and Interaction Terms
 
 ```{r}
 # Adding the interaction term between education level and wealth index
-interaction_model_no_impute <- update(enhanced_model_no_impute, . ~ . + area:wealth_index)
+interaction_model_no_impute <- update(enhanced_model_no_impute, . ~ . + ethnicity:access_to_media)
 summary(interaction_model_no_impute)
 ```
 
-```{r}
-cat("AIC (enhanced):", AIC(enhanced_model_no_impute), "\nAIC (w/ interaction terms):", AIC(interaction_model_no_impute), "\n")
-cat("BIC (enhanced):", BIC(enhanced_model_no_impute), "\nBIC (w/ interaction terms):", BIC(interaction_model_no_impute), "\n")
-```
-- The AIC and BIC results for my two models – the `enhanced_model_no_impute` and `interaction_model_no_impute` – indicate that the simpler model (without interaction terms) has a better trade-off between model fit and complexity.
-- The AIC is lower for the enhanced_model_no_impute compared to the `interaction_model_no_impute`. This suggests that, despite possibly having a good fit, the addition of interaction terms to the `interaction_model_no_impute` does not improve the model's performance enough to justify the added complexity. A lower AIC value is generally preferred, implying that the `enhanced_model_no_impute` is a better model choice from an information criterion standpoint.
-- The BIC, like the AIC, is also lower for the `enhanced_model_no_impute`. BIC, which includes a stricter penalty for the number of parameters, reinforces the conclusion drawn from the AIC: the additional complexity introduced by interaction terms does not lead to a proportional improvement in the model fit. BIC being more stringent, particularly in models with larger sample sizes and more parameters, suggests a strong preference for the simpler `enhanced_model_no_impute`.
-- Both AIC and BIC results point towards the `enhanced_model_no_impute` as a more optimal balance between goodness of fit and parsimony. This indicates that, while interaction terms add detail and complexity to the model, they might not be contributing significantly to explaining the variability in your dependent variable.
 
-```{r}
-# VIFs check (A VIF value > 5 indicates high multicollinearity)
-# Base model
-base_no_impute_vif <- vif(base_model_no_impute)
-print(base_no_impute_vif)
-
-# Enhanced model
-enhanced_no_impute_vif <- vif(enhanced_model_no_impute)
-print(enhanced_no_impute_vif)
-
-# Interacton model
-interaction_no_impute_vif <- vif(interaction_model_no_impute)
-print(interaction_no_impute_vif)
-```
-
-- Most VIF values are just slightly above 1, which indicates no concerning multicollinearity in this model.
-- Except for `wealth_index` and `area:wealth_index`, their VIF values are significantly higher (around 2.17 and 2.16, respectively). These values suggest a considerable level of multicollinearity, which is often expected when including interaction terms in a model.
-- High multicollinearity in models, especially those with interaction terms, doesn't invalidate the model but does complicate the interpretation of specific coefficients. 
-
-
-#### Comparing Models With vs Without Imputed Data
+#### Models With vs Without Imputed Data
 
 ```{r}
 # Extracting data from the models
@@ -918,6 +926,7 @@ extract_model_data <- function(model) {
 }
 ```
 
+#### Model 1: Base Model
 
 ```{r}
 # Applying the function to each model
@@ -931,11 +940,12 @@ base_comparison_data <- merge(base_impute_data, base_no_impute_data, by = "Term"
 print(base_comparison_data)
 ```
 
+- Most variables show consistent results in terms of significance and direction of effect across both models. This suggests that the imputation process has not drastically altered the relationships between these predictors and the outcome variable.
 - Education and Wealth Index variables are consistent, robust and significant predictors of the outcome across both models.
-- For some variables like 'current contraceptive use', imputation significantly impacts its role in the model. It could indicate the missing data mechanism's influence.
 - Significance of Area: This variable's significance suggests geographical variation is an important factor, but its influence is reduced in the non-imputed model.
 - The overall patterns suggest that while some predictors are consistently influential, others are sensitive to how missing data is handled.
 
+#### Model 2: Base Model with Fixed Effects
 
 ```{r}
 # Applying the function to each model
@@ -949,10 +959,12 @@ enhanced_comparison_data <- merge(enhanced_impute_data, enhanced_no_impute_data,
 print(enhanced_comparison_data)
 ```
 
-- Education levels and ethnicity (specific categories) are robust across both models.
-- Certain variables like area, region, and wealth index are sensitive to imputation, suggesting that missing data in these areas could be informative.
+- Consistent findings across the imputed and non-imputed models in certain variables (e.g., education levels 3, 4, 5, and ethnicity4) suggest that imputation does not radically alter these relationships. This consistency can indicate that imputation is not introducing significant bias for these variables.
+- Imputation might reveal statistically significant relationships that are not evident in the non-imputed data (e.g., area2, region2, region4, awareness of HIV/AIDS). 
+- For some variables (e.g., wealth_index categories), the significance and estimate values change between the models. 
 - The loss of significance in many variables in the non-imputed model suggests that the missing data may not be random and could be related to the variables' influence on the outcome.
 
+#### Model 3: Base Model with Fixed Effects and Interaction Terms
 
 ```{r}
 # Applying the function to each model
@@ -966,6 +978,289 @@ interaction_comparison_data <- merge(interaction_impute_data, interaction_no_imp
 print(interaction_comparison_data)
 ```
 
-- The effects of imputation are most pronounced in geographical variables (area and region) and some interactions, indicating a potential non-random pattern in how missing data occurs in these variables.
-- Certain variables like higher education levels and some ethnicity categories maintain their predictive power regardless of missing data imputation, indicating a stronger and more consistent relationship with the outcome.
+- Consistency in the significance of variables like education levels 3, 4, and 5, and ethnicity4 across both models suggests that imputation is not drastically changing these relationships.
+- The imputed model shows significant effects in variables (like region2, region4, ethnicity3, and interaction terms) that are not significant in the non-imputed model.
+- The differing levels of significance for variables like wealth index categories and awareness of HIV/AIDS between models raise questions about how missing data impacts these variables.
+- The loss of significance in many variables in the non-imputed model suggests that the missing data may not be random and could be related to the variables' influence on the outcome.
 
+
+### Logistic Regression Models Comparison (Odd Ratios and 95% Confidence Intervals)
+
+```{r}
+# Tidy the baseline model with confidence intervals
+tidy_base_no_impute <- tidy(base_model_no_impute, conf.int = TRUE, exponentiate = TRUE)
+
+# Tidy the enhanced model with confidence intervals
+tidy_enhanced_no_impute <- tidy(enhanced_model_no_impute, conf.int = TRUE, exponentiate = TRUE)
+
+# Tidy the interaction model with confidence intervals
+tidy_interaction_no_impute <- tidy(interaction_model_no_impute, conf.int = TRUE, exponentiate = TRUE)
+```
+
+```{r}
+# Apply the function to each model's p.value
+tidy_base_no_impute$asterisks <- sapply(tidy_base_no_impute$p.value, add_asterisks)
+tidy_enhanced_no_impute$asterisks <- sapply(tidy_enhanced_no_impute$p.value, add_asterisks)
+tidy_interaction_no_impute$asterisks <- sapply(tidy_interaction_no_impute$p.value, add_asterisks)
+```
+
+```{r}
+# Create OR strings with asterisks and format CIs as a string
+tidy_base_no_impute <- tidy_base_no_impute %>%
+  mutate(
+    OR = ifelse(is.na(estimate), NA, paste0(round(estimate, 2), asterisks)),
+    CI = ifelse(is.na(conf.low) | is.na(conf.high), NA, format_ci(conf.low, conf.high))
+  )
+
+tidy_enhanced_no_impute <- tidy_enhanced_no_impute %>%
+  mutate(
+    OR = ifelse(is.na(estimate), NA, paste0(round(estimate, 2), asterisks)),
+    CI = ifelse(is.na(conf.low) | is.na(conf.high), NA, format_ci(conf.low, conf.high))
+  )
+
+tidy_interaction_no_impute <- tidy_interaction_no_impute %>%
+  mutate(
+    OR = ifelse(is.na(estimate), NA, paste0(round(estimate, 2), asterisks)),
+    CI = ifelse(is.na(conf.low) | is.na(conf.high), NA, format_ci(conf.low, conf.high))
+  )
+```
+
+```{r}
+# Add a 'Model' column to each tidied dataframe
+tidy_base_no_impute <- tidy_base_no_impute %>% mutate(Model = "Model_1")
+tidy_enhanced_no_impute <- tidy_enhanced_no_impute %>% mutate(Model = "Model_2")
+tidy_interaction_no_impute <- tidy_interaction_no_impute %>% mutate(Model = "Model_3")
+
+# Combine and pivot the dataframes
+combined_no_impute <- bind_rows(
+  tidy_base_no_impute %>% dplyr::select(term, OR, CI, Model),
+  tidy_enhanced_no_impute %>% dplyr::select(term, OR, CI, Model),
+  tidy_interaction_no_impute %>% dplyr::select(term, OR, CI, Model)
+) %>%
+  pivot_wider(names_from = Model, values_from = c(OR, CI))
+```
+
+```{r}
+# Replace NAs with "—"
+combined_no_impute[is.na(combined_no_impute)] <- "—"
+```
+
+```{r}
+# Reordering columns to have OR and CI next to each other for each model
+combined_no_impute <- combined_no_impute %>%
+  dplyr::select(term, 
+         OR_Model_1, CI_Model_1, 
+         OR_Model_2, CI_Model_2, 
+         OR_Model_3, CI_Model_3)
+```
+
+```{r}
+# Print the final combined table
+print(combined_no_impute)
+```
+
+1. `(Intercept)` Odds Ratios and Significance:
+
+- In Model 1, the odds ratio for the intercept is 0.88, which indicates a slight negative association, but it's not statistically significant, as indicated by the absence of asterisks.
+- In Model 2, the intercept has an OR of 0.19, which is highly significant (indicated by three asterisks) and suggests a much stronger negative association.
+- Model 3 shows a similar pattern to Model 2, with a significant OR of 0.27, indicating a robust negative association.
+
+2. `Area2`:
+
+- This term has an OR of 1.3 in Model 1 and is statistically significant (denoted by two asterisks), suggesting a moderately positive association with the outcome.
+- In Models 2 and 3, the ORs are 1.16 and 1.15, respectively, showing a slight positive association, but these are not statistically significant.
+
+3. `Education Level` Categories:
+
+- All education levels in Model 1 show a significant negative association (ORs less than 1, with three asterisks), meaning higher education levels are associated with lower odds of the outcome.
+- In Models 2 and 3, education_level1 and education_level2 lose their statistical significance (ORs 1.15 and 1.09 in Model 2, and 1.14 and 1.08 in Model 3), indicating no strong association.
+- However, education_level3, education_level4, and education_level5 maintain their strong, significant negative association in Models 2 and 3, as indicated by the ORs (0.49, 0.06, and 0.08) and the presence of three asterisks.
+
+4. `Wealth Index` Categories:
+
+- In Model 1, all wealth index categories show a significant negative association with the outcome, with ORs ranging from 0.36 to 0.54 and marked with three asterisks.
+- The strength of this association decreases in Models 2 and 3, with ORs moving closer to 1 and varying levels of significance, showing that wealth's impact on the outcome is less pronounced or potentially confounded by other variables in these models.
+
+5. `Health Insurance`:
+
+- There is no statistically significant association between health insurance and the outcome in any model, as indicated by ORs around 1 and the absence of asterisks.
+
+6. `Current Contraceptive Use`:
+
+- Similar to health insurance, this variable shows no significant association with the outcome in any of the models.
+
+7. `Awareness of HIV/AIDS`:
+- In Model 1, there is a significant negative association (OR 0.62, three asterisks), but this association becomes non-significant in Models 2 and 3.
+
+8. `Access to Media`:
+
+This variable shows no consistent or significant association with the outcome across the three models.
+
+9. `Region` Variables in Models 2 and 3:
+
+- These variables are only included in the latter two models and show varying ORs, but none of them are statistically significant.
+
+10. `Ethnicity` Categories in Models 2 and 3:
+
+- Ethnicity shows significant positive associations in these models, particularly for `ethnicity4`, which has very high ORs and is highly significant.
+
+11. Interaction Terms `ethnicity:access_to_media` in Model 3:
+
+- The interaction terms involving ethnicity and access to media are introduced in Model 3, but none show statistical significance.
+
+
+### Models Validation
+
+#### Likelihood Ratio Test (LRT)
+
+```{r}
+# Model 1 vs. Model 2
+anova(base_model_no_impute, enhanced_model_no_impute, test="Chisq")
+```
+
+The Model 2 provides a significantly better fit to the data compared to the Model 1, as indicated by the large decrease in residual deviance and the very small p-value (< 2.2e-16).
+
+
+```{r}
+# Model 1 vs. Model 3
+anova(base_model_no_impute, interaction_model_no_impute, test="Chisq")
+```
+
+The Model 3 provides a significantly better fit to the data compared to the Model 1, as indicated by the large decrease in residual deviance and the very small p-value (< 2.2e-16).
+
+```{r}
+# Model 2 vs. Model 3
+anova(enhanced_model_no_impute, interaction_model_no_impute, test="Chisq")
+```
+
+The residual deviance in Model 3 is slightly lower compared to Model 1, indicating a potential improvement in model fit but not significant.
+
+The p-value of 0.251 is not below the common significance level. This indicates that the addition of the interaction term `ethnicity:access_to_media` in Model 3 does not significantly improve the model fit compared to Model 2. In simpler terms, the interaction between `ethnicity` and `access_to_media` does not seem to have a significant effect on predicting child marriage.
+
+
+#### ROC Curve and AUC
+
+```{r message=FALSE, warning=FALSE}
+invisible(plot(roc(og_df$child_marriage,
+                   fitted(base_model_no_impute)),
+               col = "red",
+               main = "ROC Curve: \nModel 1 (red) vs. Model 2 (green) vs. Model 3 (blue)"))
+
+invisible(plot(roc(og_df$child_marriage,
+                   fitted(enhanced_model_no_impute)),
+               col = "green",
+               add = T))
+
+invisible(plot(roc(og_df$child_marriage,
+                   fitted(interaction_model_no_impute)),
+               print.auc = T,
+               col = "blue",
+               add = T))
+
+```
+
+```{r message=FALSE}
+# For each model
+roc_response_model_1 <- roc(og_df$child_marriage, fitted(base_model_no_impute))
+auc_model_1 <- auc(roc_response_model_1)
+
+roc_response_model_2 <- roc(og_df$child_marriage, fitted(enhanced_model_no_impute))
+auc_model_2 <- auc(roc_response_model_2)
+
+roc_response_model_3 <- roc(og_df$child_marriage, fitted(interaction_model_no_impute))
+auc_model_3 <- auc(roc_response_model_3)
+
+# Compare AUC values
+print(paste("AUC Model 1:", auc_model_1))
+print(paste("AUC Model 2:", auc_model_2))
+print(paste("AUC Model 3:", auc_model_3))
+```
+
+1. Model 1 (AUC: 0.7465):
+
+An AUC of 0.5 represents a model with no discriminative ability (akin to random guessing), while an AUC of 1.0 represents perfect discrimination. So, my model is performing substantially better than random guessing.
+
+The AUC of 0.7 indicates that the Model 1 has good discriminative ability. In other words, it is capable of distinguishing between cases and controls with a high degree of accuracy.
+
+2. Model 2 (AUC: 0.7661):
+
+This model shows a slight improvement in AUC over the Model 1. The increase suggests that the additional variables (or adjustments) I made in the Model 2 contribute positively to its ability to differentiate between cases and controls.
+The difference in AUC between the Model 1 and Model 2, while modest, is still meaningful, especially in practical, real-world contexts.
+
+3. Model 3 (AUC: 0.7672):
+
+The Model 3 shows a very slight improvement in AUC over the Model 2. This indicates that adding interaction terms provides a marginal improvement in the model's discriminatory power.
+However, the improvement is very minimal, which aligns with my earlier findings that the interaction terms did not significantly improve the model fit.
+
+4. Overall:
+
+All models demonstrate good ability to distinguish between cases and controls. An AUC greater than 0.7 is generally considered acceptable, and my models are above 0.7 and close to 0.8.
+The Model 2 and Model 3 only show marginal improvements in AUC compared to the Model 1. This suggests that while the additional complexity (more variables and interaction terms) does contribute slightly to model performance, the gains are not substantial.
+
+
+#### Residuals Plot
+
+```{r message=FALSE, warning=FALSE}
+binnedplot(fitted(interaction_model_no_impute),
+           residuals(interaction_model_no_impute, type = "response"),
+           nclass = NULL,
+           xlab = "Expected Values",
+           ylab = "Average Residuals",
+           main = "Binned Residual Plot",
+           cex.pts = 1,
+           col.int = "gray")
+```
+
+#### Hosmer-Lemeshow Test
+
+```{r}
+# 1. Hosmer-Lemeshow Test for the Model 1
+hoslem.test(base_model_no_impute$y, fitted(base_model_no_impute), g=10)
+
+# 2. Hosmer-Lemeshow Test for the Model 2 (Baseline + Fixed Effects)
+hoslem.test(enhanced_model_no_impute$y, fitted(enhanced_model_no_impute), g=10)
+
+# 3. Hosmer-Lemeshow Test for the Model 3 (Baseline + Fixed Effects + Interaction Terms)
+hoslem.test(interaction_model_no_impute$y, fitted(interaction_model_no_impute), g=10)
+```
+
+A large p-value (>0.05) indicates a good fit, meaning that there's no significant difference between the observed and predicted values. Through each model, the p-value increases which suggests that our decision to include fixed effects and interaction terms are significant.
+
+#### Accessing Multicollinearity (VIF)
+
+```{r}
+# VIFs check (A VIF value > 5 indicates high multicollinearity)
+# Base model
+model_1_vif <- vif(base_model_no_impute)
+print(model_1_vif)
+
+# Enhanced model
+model_2_vif <- vif(enhanced_model_no_impute)
+print(model_2_vif)
+
+# Interacton model
+model_3_vif <- vif(interaction_model_no_impute)
+print(model_3_vif)
+```
+
+- Model 1 has the least concern with multicollinearity.
+- Model 2 introduces `region` and `ethnicity`, with a mild increase in multicollinearity, but not at alarming levels.
+- Model 3 exhibits more noticeable multicollinearity, particularly with `ethnicity`, `access_to_media` and its interaction with one another`; their VIF values are significantly higher (around 3.27, 2.61, and 3.07, respectively). Although these values are below 5, the increase is substantial compared to the previous models and could start to affect the reliability and interpretability of the regression coefficients for these variables.
+- High multicollinearity in models, especially those with interaction terms, doesn't invalidate the model but does complicate the interpretation of specific coefficients.
+
+
+#### Assessing AIC and BIC
+
+```{r}
+# Create a data frame to hold AIC and BIC values
+aic_bic_comparison <- data.frame(
+    Model = c("Model 1", "Model 2", "Model 3"),
+    AIC = c(AIC(base_model_no_impute), AIC(enhanced_model_no_impute), AIC(interaction_model_no_impute)),
+    BIC = c(BIC(base_model_no_impute), BIC(enhanced_model_no_impute), BIC(interaction_model_no_impute))
+)
+
+# Print the table
+print(aic_bic_comparison)
+```
+
+Model 2 has the lowest AIC and BIC values of all, indicating that it might be the best model among the three in terms of balancing fit and complexity. 
