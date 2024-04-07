@@ -554,11 +554,11 @@ enhanced_model <- glm(child_marriage ~ area + region + education_level + ethnici
 summary(enhanced_model)
 ```
 
-### Model 3 - Model with Interaction Terms (Ethnicity:Access_to_media)
+### Model 3 - Model with Interaction Terms (area:education_level)
 
 ```{r}
-# Adding the interaction term between ethnicity and access_to_media
-model_interaction <- update(enhanced_model, . ~ . + ethnicity:access_to_media)
+# Adding the interaction term between area and education level
+model_interaction <- update(enhanced_model, . ~ . + area:education_level)
 summary(model_interaction)
 ```
 
@@ -686,11 +686,7 @@ The Model 3 provides a significantly better fit to the data compared to the Mode
 anova(enhanced_model, model_interaction, test="Chisq")
 ```
 
-The p-value is extremely small (4.401e-06), far below the common significance level of 0.05. This means the difference in fit between the two models is statistically significant.
-
-Adding the interaction terms between `ethnicity` and `access_to_media` to Model 3 improved the model fit compared to the Model 2 without interaction terms. This indicates that the relationship between ethnicity and child marriage is significantly affected by access to media.
-
-Based on this analysis, Model 2 would be preferred over Model 1 for understanding or predicting child marriage, as it accounts for the interaction effect that is significant in your data.
+The p-value is not significant.
 
 
 #### ROC Curve and AUC
@@ -742,7 +738,7 @@ The AUC of 0.7 indicates that the Model 1 has good discriminative ability. In ot
 This model shows a slight improvement in AUC over the Model 1. The increase suggests that the additional variables (or adjustments) I made in the Model 2 contribute positively to its ability to differentiate between cases and controls.
 The difference in AUC between the Model 1 and Model 2, while modest, is still meaningful, especially in practical, real-world contexts.
 
-3. Model 3 (AUC: 0.7896):
+3. Model 3 (AUC: 0.7876):
 
 The Model 3 shows a very slight improvement in AUC over the Model 2. This indicates that adding interaction terms provides a marginal improvement in the model's discriminatory power.
 However, the improvement is very minimal, which aligns with my earlier findings that the interaction terms did not significantly improve the model fit.
@@ -801,7 +797,7 @@ print(model_3_vif)
 
 - Model 1 has the least concern with multicollinearity.
 - Model 2 introduces `region` and `ethnicity`, with a mild increase in multicollinearity, but not at alarming levels.
-- Model 3 exhibits more noticeable multicollinearity, particularly with the `ethnicity` variable and its interaction with `access_to_media`; their VIF values are significantly higher (around 2.82 and 2.74, respectively). Although these values are below 5, the increase is substantial compared to the previous models and could start to affect the reliability and interpretability of the regression coefficients for these variables.
+- Model 3 exhibits more noticeable multicollinearity, particularly with the `area` variable and its interaction with `education_level`; their VIF values are significantly higher (around 3.57, 2.3, and 2.37, respectively). Although these values are below 5, the increase is substantial compared to the previous models and could start to affect the reliability and interpretability of the regression coefficients for these variables.
 - High multicollinearity in models, especially those with interaction terms, doesn't invalidate the model but does complicate the interpretation of specific coefficients.
 
 
@@ -819,7 +815,7 @@ aic_bic_comparison <- data.frame(
 print(aic_bic_comparison)
 ```
 
-Model 3 has the lowest AIC value of all, indicating that it might be the best model among the three in terms of balancing fit and complexity according to AIC. However, its BIC is very slightly lower than that of Model 2, making it almost equivalent to Model 2 in terms of BIC. This small difference in BIC suggests that Model 3 and Model 2 have similar levels of complexity-adjusted fit.
+Model 2 has the lowest AIC and BIC values of all, indicating that it might be the best model among the three in terms of balancing fit and complexity.
 
 
 
@@ -902,8 +898,8 @@ summary(enhanced_model_no_impute)
 #### Model 3: Base Model with Fixed Effects and Interaction Terms
 
 ```{r}
-# Adding the interaction term between education level and wealth index
-interaction_model_no_impute <- update(enhanced_model_no_impute, . ~ . + ethnicity:access_to_media)
+# Adding the interaction term between  area and education level
+interaction_model_no_impute <- update(enhanced_model_no_impute, . ~ . + area:education_level)
 summary(interaction_model_no_impute)
 ```
 
@@ -1135,7 +1131,7 @@ anova(enhanced_model_no_impute, interaction_model_no_impute, test="Chisq")
 
 The residual deviance in Model 3 is slightly lower compared to Model 1, indicating a potential improvement in model fit but not significant.
 
-The p-value of 0.251 is not below the common significance level. This indicates that the addition of the interaction term `ethnicity:access_to_media` in Model 3 does not significantly improve the model fit compared to Model 2. In simpler terms, the interaction between `ethnicity` and `access_to_media` does not seem to have a significant effect on predicting child marriage.
+The p-value of 0.5896 is not below the common significance level. This indicates that the addition of the interaction term `area:education_level` in Model 3 does not significantly improve the model fit compared to Model 2. In simpler terms, the interaction between `area` and `education_level` does not seem to have a significant effect on predicting child marriage.
 
 
 #### ROC Curve and AUC
@@ -1161,40 +1157,40 @@ invisible(plot(roc(og_df$child_marriage,
 
 ```{r message=FALSE}
 # For each model
-roc_response_model_1 <- roc(og_df$child_marriage, fitted(base_model_no_impute))
-auc_model_1 <- auc(roc_response_model_1)
+roc_model_1 <- roc(og_df$child_marriage, fitted(base_model_no_impute))
+auc_mod_1 <- auc(roc_model_1)
 
-roc_response_model_2 <- roc(og_df$child_marriage, fitted(enhanced_model_no_impute))
-auc_model_2 <- auc(roc_response_model_2)
+roc_model_2 <- roc(og_df$child_marriage, fitted(enhanced_model_no_impute))
+auc_mod_2 <- auc(roc_model_2)
 
-roc_response_model_3 <- roc(og_df$child_marriage, fitted(interaction_model_no_impute))
-auc_model_3 <- auc(roc_response_model_3)
+roc_model_3 <- roc(og_df$child_marriage, fitted(interaction_model_no_impute))
+auc_mod_3 <- auc(roc_model_3)
 
 # Compare AUC values
-print(paste("AUC Model 1:", auc_model_1))
-print(paste("AUC Model 2:", auc_model_2))
-print(paste("AUC Model 3:", auc_model_3))
+print(paste("AUC Model 1:", auc_mod_1))
+print(paste("AUC Model 2:", auc_mod_2))
+print(paste("AUC Model 3:", auc_mod_3))
 ```
 
-1. Model 1 (AUC: 0.7465):
+1. Model 1 (AUC: 0.7834):
 
 An AUC of 0.5 represents a model with no discriminative ability (akin to random guessing), while an AUC of 1.0 represents perfect discrimination. So, my model is performing substantially better than random guessing.
 
 The AUC of 0.7 indicates that the Model 1 has good discriminative ability. In other words, it is capable of distinguishing between cases and controls with a high degree of accuracy.
 
-2. Model 2 (AUC: 0.7661):
+2. Model 2 (AUC: 0.7998):
 
 This model shows a slight improvement in AUC over the Model 1. The increase suggests that the additional variables (or adjustments) I made in the Model 2 contribute positively to its ability to differentiate between cases and controls.
 The difference in AUC between the Model 1 and Model 2, while modest, is still meaningful, especially in practical, real-world contexts.
 
-3. Model 3 (AUC: 0.7672):
+3. Model 3 (AUC: 0.8000):
 
 The Model 3 shows a very slight improvement in AUC over the Model 2. This indicates that adding interaction terms provides a marginal improvement in the model's discriminatory power.
 However, the improvement is very minimal, which aligns with my earlier findings that the interaction terms did not significantly improve the model fit.
 
 4. Overall:
 
-All models demonstrate good ability to distinguish between cases and controls. An AUC greater than 0.7 is generally considered acceptable, and my models are above 0.7 and close to 0.8.
+All models demonstrate good ability to distinguish between cases and controls. An AUC greater than 0.7 is generally considered acceptable, and my models are above 0.7 and model 3 equals to 0.8.
 The Model 2 and Model 3 only show marginal improvements in AUC compared to the Model 1. This suggests that while the additional complexity (more variables and interaction terms) does contribute slightly to model performance, the gains are not substantial.
 
 
@@ -1245,7 +1241,7 @@ print(model_3_vif)
 
 - Model 1 has the least concern with multicollinearity.
 - Model 2 introduces `region` and `ethnicity`, with a mild increase in multicollinearity, but not at alarming levels.
-- Model 3 exhibits more noticeable multicollinearity, particularly with `ethnicity`, `access_to_media` and its interaction with one another`; their VIF values are significantly higher (around 3.27, 2.61, and 3.07, respectively). Although these values are below 5, the increase is substantial compared to the previous models and could start to affect the reliability and interpretability of the regression coefficients for these variables.
+- Model 3 exhibits more noticeable multicollinearity, particularly with `area`, `education_level` and its interaction with one another`; their VIF values are significantly higher (around 4.2, 2.17, and 2.25, respectively). Although these values are below 5, the increase is substantial compared to the previous models and could start to affect the reliability and interpretability of the regression coefficients for these variables.
 - High multicollinearity in models, especially those with interaction terms, doesn't invalidate the model but does complicate the interpretation of specific coefficients.
 
 
