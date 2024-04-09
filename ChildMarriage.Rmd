@@ -32,7 +32,8 @@ library(tidyr)
 library(ResourceSelection)
 library(sf)
 library(arm)
-
+library(xtable)
+library(gridExtra)
 ```
 
 ### Setting up Data
@@ -160,6 +161,10 @@ afm_hist <- ggplot(married_df, aes(x = age_first_marriage)) +
   ylab("Frequency")
 
 print(afm_hist)
+```
+
+```{r}
+ggsave("afm_hist.png", plot = afm_hist, width = 8, height = 6)
 ```
 
 
@@ -462,7 +467,7 @@ p <- ggplot(counts_df, aes(x = factor(region))) +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5, size = 18),
         plot.margin = margin(t = 10, r = 10, b = 10, l = 10, unit = "mm"), 
-        axis.text.x = element_text(size = 14, angle = 45, hjust = 1), 
+        axis.text.x = element_text(size = 12, angle = 45, hjust = 1), 
         legend.position = c(0.85,0.8),
         legend.text = element_text(size = 12),
         legend.title = element_text(size = 14)) +
@@ -474,7 +479,7 @@ print(p)
 ```
 
 ```{r}
-#ggsave("marital_status.png", plot = p, width = 10, height = 5)
+#ggsave("marital_status.png", plot = p, width = 8, height = 7)
 ```
 
 
@@ -665,6 +670,29 @@ print(combined_results)
 
 ### Models Validation
 
+#### Accessing Multicollinearity (VIF)
+
+```{r}
+# VIFs check (A VIF value > 5 indicates high multicollinearity)
+# Base model
+model_1_vif <- vif(baseline_model)
+print(model_1_vif)
+
+# Enhanced model
+model_2_vif <- vif(enhanced_model)
+print(model_2_vif)
+
+# Interacton model
+model_3_vif <- vif(model_interaction)
+print(model_3_vif)
+```
+
+- Model 1 has the least concern with multicollinearity.
+- Model 2 introduces `region` and `ethnicity`, with a mild increase in multicollinearity, but not at alarming levels.
+- Model 3 exhibits more noticeable multicollinearity, particularly with the `area` variable and its interaction with `education_level`; their VIF values are significantly higher (around 3.57, 2.3, and 2.37, respectively). Although these values are below 5, the increase is substantial compared to the previous models and could start to affect the reliability and interpretability of the regression coefficients for these variables.
+- High multicollinearity in models, especially those with interaction terms, doesn't invalidate the model but does complicate the interpretation of specific coefficients.
+
+
 #### Likelihood Ratio Test (LRT)
 
 ```{r}
@@ -689,13 +717,60 @@ anova(enhanced_model, model_interaction, test="Chisq")
 The p-value is not significant.
 
 
+#### Assessing AIC and BIC
+
+```{r}
+# Create a data frame to hold AIC and BIC values
+aic_bic_comparison <- data.frame(
+    Model = c("Model 1", "Model 2", "Model 3"),
+    AIC = c(AIC(baseline_model), AIC(enhanced_model), AIC(model_interaction)),
+    BIC = c(BIC(baseline_model), BIC(enhanced_model), BIC(model_interaction))
+)
+
+# Print the table
+print(aic_bic_comparison)
+```
+
+Model 2 has the lowest AIC and BIC values of all, indicating that it might be the best model among the three in terms of balancing fit and complexity.
+
+
+#### Hosmer-Lemeshow Test
+
+```{r}
+# 1. Hosmer-Lemeshow Test for the Model 1
+hoslem.test(baseline_model$y, fitted(baseline_model), g=10)
+
+# 2. Hosmer-Lemeshow Test for the Model 2 (Baseline + Fixed Effects)
+hoslem.test(enhanced_model$y, fitted(enhanced_model), g=10)
+
+# 3. Hosmer-Lemeshow Test for the Model 3 (Baseline + Fixed Effects + Interaction Terms)
+hoslem.test(model_interaction$y, fitted(model_interaction), g=10)
+```
+
+A large p-value (>0.05) indicates a good fit, meaning that there's no significant difference between the observed and predicted values. Through each model, the p-value increases which suggests that our decision to include fixed effects and interaction terms are significant.
+
+
+#### Residuals Plot
+
+```{r message=FALSE, warning=FALSE}
+binnedplot(fitted(model_interaction),
+           residuals(model_interaction, type = "response"),
+           nclass = NULL,
+           xlab = "Expected Values",
+           ylab = "Average Residuals",
+           main = "Binned Residual Plot",
+           cex.pts = 1,
+           col.int = "gray")
+```
+
+
 #### ROC Curve and AUC
 
 ```{r message=FALSE, warning=FALSE}
 invisible(plot(roc(imputed_df$child_marriage,
                    fitted(baseline_model)),
                col = "red",
-               main = "ROC Curve: \nModel 1 (red) vs. Model 2 (green) vs. Model 3 (blue)"))
+               main = "ROC Curve: \nModel I (Red) vs. Model II (Green) vs. Model III (Blue)"))
 
 invisible(plot(roc(imputed_df$child_marriage,
                    fitted(enhanced_model)),
@@ -747,75 +822,6 @@ However, the improvement is very minimal, which aligns with my earlier findings 
 
 All models demonstrate good ability to distinguish between cases and controls. An AUC greater than 0.7 is generally considered acceptable, and my models are above 0.7 and close to 0.8.
 The Model 2 and Model 3 only show marginal improvements in AUC compared to the Model 1. This suggests that while the additional complexity (more variables and interaction terms) does contribute slightly to model performance, the gains are not substantial.
-
-
-#### Residuals Plot
-
-```{r message=FALSE, warning=FALSE}
-binnedplot(fitted(model_interaction),
-           residuals(model_interaction, type = "response"),
-           nclass = NULL,
-           xlab = "Expected Values",
-           ylab = "Average Residuals",
-           main = "Binned Residual Plot",
-           cex.pts = 1,
-           col.int = "gray")
-```
-
-#### Hosmer-Lemeshow Test
-
-```{r}
-# 1. Hosmer-Lemeshow Test for the Model 1
-hoslem.test(baseline_model$y, fitted(baseline_model), g=10)
-
-# 2. Hosmer-Lemeshow Test for the Model 2 (Baseline + Fixed Effects)
-hoslem.test(enhanced_model$y, fitted(enhanced_model), g=10)
-
-# 3. Hosmer-Lemeshow Test for the Model 3 (Baseline + Fixed Effects + Interaction Terms)
-hoslem.test(model_interaction$y, fitted(model_interaction), g=10)
-```
-
-A large p-value (>0.05) indicates a good fit, meaning that there's no significant difference between the observed and predicted values. Through each model, the p-value increases which suggests that our decision to include fixed effects and interaction terms are significant.
-
-
-#### Accessing Multicollinearity (VIF)
-
-```{r}
-# VIFs check (A VIF value > 5 indicates high multicollinearity)
-# Base model
-model_1_vif <- vif(baseline_model)
-print(model_1_vif)
-
-# Enhanced model
-model_2_vif <- vif(enhanced_model)
-print(model_2_vif)
-
-# Interacton model
-model_3_vif <- vif(model_interaction)
-print(model_3_vif)
-```
-
-- Model 1 has the least concern with multicollinearity.
-- Model 2 introduces `region` and `ethnicity`, with a mild increase in multicollinearity, but not at alarming levels.
-- Model 3 exhibits more noticeable multicollinearity, particularly with the `area` variable and its interaction with `education_level`; their VIF values are significantly higher (around 3.57, 2.3, and 2.37, respectively). Although these values are below 5, the increase is substantial compared to the previous models and could start to affect the reliability and interpretability of the regression coefficients for these variables.
-- High multicollinearity in models, especially those with interaction terms, doesn't invalidate the model but does complicate the interpretation of specific coefficients.
-
-
-#### Assessing AIC and BIC
-
-```{r}
-# Create a data frame to hold AIC and BIC values
-aic_bic_comparison <- data.frame(
-    Model = c("Model 1", "Model 2", "Model 3"),
-    AIC = c(AIC(baseline_model), AIC(enhanced_model), AIC(model_interaction)),
-    BIC = c(BIC(baseline_model), BIC(enhanced_model), BIC(model_interaction))
-)
-
-# Print the table
-print(aic_bic_comparison)
-```
-
-Model 2 has the lowest AIC and BIC values of all, indicating that it might be the best model among the three in terms of balancing fit and complexity.
 
 
 
@@ -1105,7 +1111,31 @@ This variable shows no consistent or significant association with the outcome ac
 - The interaction terms involving ethnicity and access to media are introduced in Model 3, but none show statistical significance.
 
 
+
 ### Models Validation
+
+#### Accessing Multicollinearity (VIF)
+
+```{r}
+# VIFs check (A VIF value > 5 indicates high multicollinearity)
+# Base model
+model_1_vif <- vif(base_model_no_impute)
+print(model_1_vif)
+
+# Enhanced model
+model_2_vif <- vif(enhanced_model_no_impute)
+print(model_2_vif)
+
+# Interacton model
+model_3_vif <- vif(interaction_model_no_impute)
+print(model_3_vif)
+```
+
+- Model 1 has the least concern with multicollinearity.
+- Model 2 introduces `region` and `ethnicity`, with a mild increase in multicollinearity, but not at alarming levels.
+- Model 3 exhibits more noticeable multicollinearity, particularly with `area`, `education_level` and its interaction with one another`; their VIF values are significantly higher (around 4.2, 2.17, and 2.25, respectively). Although these values are below 5, the increase is substantial compared to the previous models and could start to affect the reliability and interpretability of the regression coefficients for these variables.
+- High multicollinearity in models, especially those with interaction terms, doesn't invalidate the model but does complicate the interpretation of specific coefficients.
+
 
 #### Likelihood Ratio Test (LRT)
 
@@ -1134,13 +1164,60 @@ The residual deviance in Model 3 is slightly lower compared to Model 1, indicati
 The p-value of 0.5896 is not below the common significance level. This indicates that the addition of the interaction term `area:education_level` in Model 3 does not significantly improve the model fit compared to Model 2. In simpler terms, the interaction between `area` and `education_level` does not seem to have a significant effect on predicting child marriage.
 
 
+#### Assessing AIC and BIC
+
+```{r}
+# Create a data frame to hold AIC and BIC values
+aic_bic_comparison <- data.frame(
+    Model = c("Model 1", "Model 2", "Model 3"),
+    AIC = c(AIC(base_model_no_impute), AIC(enhanced_model_no_impute), AIC(interaction_model_no_impute)),
+    BIC = c(BIC(base_model_no_impute), BIC(enhanced_model_no_impute), BIC(interaction_model_no_impute))
+)
+
+# Print the table
+print(aic_bic_comparison)
+```
+
+Model 2 has the lowest AIC and BIC values of all, indicating that it might be the best model among the three in terms of balancing fit and complexity. 
+
+
+#### Hosmer-Lemeshow Test
+
+```{r}
+# 1. Hosmer-Lemeshow Test for the Model 1
+hoslem.test(base_model_no_impute$y, fitted(base_model_no_impute), g=10)
+
+# 2. Hosmer-Lemeshow Test for the Model 2 (Baseline + Fixed Effects)
+hoslem.test(enhanced_model_no_impute$y, fitted(enhanced_model_no_impute), g=10)
+
+# 3. Hosmer-Lemeshow Test for the Model 3 (Baseline + Fixed Effects + Interaction Terms)
+hoslem.test(interaction_model_no_impute$y, fitted(interaction_model_no_impute), g=10)
+```
+
+A large p-value (>0.05) indicates a good fit, meaning that there's no significant difference between the observed and predicted values. Through each model, the p-value increases which suggests that our decision to include fixed effects and interaction terms are significant.
+
+
+#### Residuals Plot
+
+```{r message=FALSE, warning=FALSE}
+binnedplot(fitted(interaction_model_no_impute),
+           residuals(interaction_model_no_impute, type = "response"),
+           nclass = NULL,
+           xlab = "Expected Values",
+           ylab = "Average Residuals",
+           main = "Binned Residual Plot",
+           cex.pts = 1,
+           col.int = "gray")
+```
+
+
 #### ROC Curve and AUC
 
 ```{r message=FALSE, warning=FALSE}
 invisible(plot(roc(og_df$child_marriage,
                    fitted(base_model_no_impute)),
                col = "red",
-               main = "ROC Curve: \nModel 1 (red) vs. Model 2 (green) vs. Model 3 (blue)"))
+               main = "ROC Curve: \nModel I (Red) vs. Model II (Green) vs. Model III (Blue)"))
 
 invisible(plot(roc(og_df$child_marriage,
                    fitted(enhanced_model_no_impute)),
@@ -1193,70 +1270,3 @@ However, the improvement is very minimal, which aligns with my earlier findings 
 All models demonstrate good ability to distinguish between cases and controls. An AUC greater than 0.7 is generally considered acceptable, and my models are above 0.7 and model 3 equals to 0.8.
 The Model 2 and Model 3 only show marginal improvements in AUC compared to the Model 1. This suggests that while the additional complexity (more variables and interaction terms) does contribute slightly to model performance, the gains are not substantial.
 
-
-#### Residuals Plot
-
-```{r message=FALSE, warning=FALSE}
-binnedplot(fitted(interaction_model_no_impute),
-           residuals(interaction_model_no_impute, type = "response"),
-           nclass = NULL,
-           xlab = "Expected Values",
-           ylab = "Average Residuals",
-           main = "Binned Residual Plot",
-           cex.pts = 1,
-           col.int = "gray")
-```
-
-#### Hosmer-Lemeshow Test
-
-```{r}
-# 1. Hosmer-Lemeshow Test for the Model 1
-hoslem.test(base_model_no_impute$y, fitted(base_model_no_impute), g=10)
-
-# 2. Hosmer-Lemeshow Test for the Model 2 (Baseline + Fixed Effects)
-hoslem.test(enhanced_model_no_impute$y, fitted(enhanced_model_no_impute), g=10)
-
-# 3. Hosmer-Lemeshow Test for the Model 3 (Baseline + Fixed Effects + Interaction Terms)
-hoslem.test(interaction_model_no_impute$y, fitted(interaction_model_no_impute), g=10)
-```
-
-A large p-value (>0.05) indicates a good fit, meaning that there's no significant difference between the observed and predicted values. Through each model, the p-value increases which suggests that our decision to include fixed effects and interaction terms are significant.
-
-#### Accessing Multicollinearity (VIF)
-
-```{r}
-# VIFs check (A VIF value > 5 indicates high multicollinearity)
-# Base model
-model_1_vif <- vif(base_model_no_impute)
-print(model_1_vif)
-
-# Enhanced model
-model_2_vif <- vif(enhanced_model_no_impute)
-print(model_2_vif)
-
-# Interacton model
-model_3_vif <- vif(interaction_model_no_impute)
-print(model_3_vif)
-```
-
-- Model 1 has the least concern with multicollinearity.
-- Model 2 introduces `region` and `ethnicity`, with a mild increase in multicollinearity, but not at alarming levels.
-- Model 3 exhibits more noticeable multicollinearity, particularly with `area`, `education_level` and its interaction with one another`; their VIF values are significantly higher (around 4.2, 2.17, and 2.25, respectively). Although these values are below 5, the increase is substantial compared to the previous models and could start to affect the reliability and interpretability of the regression coefficients for these variables.
-- High multicollinearity in models, especially those with interaction terms, doesn't invalidate the model but does complicate the interpretation of specific coefficients.
-
-
-#### Assessing AIC and BIC
-
-```{r}
-# Create a data frame to hold AIC and BIC values
-aic_bic_comparison <- data.frame(
-    Model = c("Model 1", "Model 2", "Model 3"),
-    AIC = c(AIC(base_model_no_impute), AIC(enhanced_model_no_impute), AIC(interaction_model_no_impute)),
-    BIC = c(BIC(base_model_no_impute), BIC(enhanced_model_no_impute), BIC(interaction_model_no_impute))
-)
-
-# Print the table
-print(aic_bic_comparison)
-```
-
-Model 2 has the lowest AIC and BIC values of all, indicating that it might be the best model among the three in terms of balancing fit and complexity. 
