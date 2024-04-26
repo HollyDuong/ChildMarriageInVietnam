@@ -1,17 +1,21 @@
 ---
-title: "Child Marriage Phenomenon In Vietnam"
+title: "Understanding Child Marriage Through In Vietnam's Socio-Demographic Prism"
 author: "Holly Duong"
 date: "2024-02-29"
 output:
   html_document: default
-  pdf_document: default
-  always_allow_html: true
   word_document: default
+  always_allow_html: true
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
+# 1. Set Up
+
+### Import Packages
 
 ```{r message=FALSE, warning=FALSE}
 # load packages
@@ -33,20 +37,26 @@ library(ResourceSelection)
 library(sf)
 library(arm)
 library(xtable)
-library(gridExtra)
+
+# display packages versions
+#sessionInfo()
 ```
 
-### Setting up Data
+### Import Data
 
 ```{r message=FALSE, warning=FALSE}
 # import dataset
-female <- read_csv("/Users/hollyduong/Desktop/DA 401/ChildMarriageInVietnam/Data/wm.csv")
+female <- read_csv("/Users/hollyduong/Desktop/DA 401/ChildMarriageInVietnam/Raw Data/wm.csv")
 ```
 
 ```{r}
 # get a glimpse of dataset
 head(female)
 ```
+
+# 2. Data Pre-processing
+
+### Variables Selection
 
 ```{r}
 # Select the specified columns to create a new dataframe
@@ -76,11 +86,15 @@ female_df <- female_df %>%
 )
 ```
 
+### Check For Missing Data
+
 ```{r}
 # Summarize missing values by column
 summarize_missing <- sapply(female_df, function(x) sum(is.na(x)))
 print(summarize_missing)
 ```
+
+### Data Cleaning
 
 ```{r}
 # Recode the value 9 to NA for specified variables
@@ -118,7 +132,7 @@ female_df$used_internet <- ifelse(female_df$used_internet == 2, 0, female_df$use
 summary(female_df)
 ```
 
-### Creating New Variable `Access to Media`
+### Create New Variable `Access to Media`
 
 ```{r}
 # Combine individual variables for access to the internet, phone, and computer into a single variable
@@ -134,6 +148,7 @@ female_df <- female_df %>%
   dplyr::select(-used_computer_tablet, -used_internet, -owns_mobile_phone)
 ```
 
+### Data Filtering (IMPORTANT: keeping only data of married demographics)
 
 ```{r}
 # Removing rows where 'age_first_marriage' is NA in female_df
@@ -142,33 +157,12 @@ married_df <- female_df[!is.na(female_df$age_first_marriage), ]
 summary(married_df)
 ```
 
-
 ```{r}
 # Exporting female_df to a CSV file in the current working directory
 #write.csv(married_df, "married_df.csv", row.names = FALSE)
 ```
 
-
-### Distributions of Data
-
-```{r}
-# Histogram for 'Age at First Marriage'
-afm_hist <- ggplot(married_df, aes(x = age_first_marriage)) +
-  geom_histogram(fill = "#F7C0C8", color = "black") +
-  theme_minimal() +
-  ggtitle("Histogram of Age at First Marriage") +
-  xlab("Age at First Marriage") +
-  ylab("Frequency")
-
-print(afm_hist)
-```
-
-```{r}
-ggsave("afm_hist.png", plot = afm_hist, width = 8, height = 6)
-```
-
-
-### Handling Missing Data
+### Missing Data Imputation (For Approach 1)
 
 ```{r}
 # Before that, let's double check the count of missing values by column
@@ -230,7 +224,6 @@ mode_wealth_index <- getMode(imputed_df$wealth_index)
 imputed_df <- mutate(imputed_df, wealth_index = ifelse(is.na(wealth_index), mode_wealth_index, wealth_index))
 ```
 
-
 ```{r}
 # Check the resulting dataset to confirm changes
 summary(imputed_df)
@@ -286,13 +279,22 @@ educ_imputed <- ggplot(imputed_df, aes(x = education_level)) +
 grid.arrange(educ, educ_imputed, ncol = 2)
 ```
 
+### `Age_first_marriage` Distribution
 
 ```{r}
-# Arrange the two plots side by side and capture the layout as a grob
-#combined_plots <- arrangeGrob(afm_0, afm_imputed, ncol = 2)
+# Histogram for 'Age at First Marriage'
+afm_hist <- ggplot(imputed_df, aes(x = age_first_marriage)) +
+  geom_histogram(fill = "#F7C0C8", color = "black") +
+  theme_minimal() +
+  ggtitle("Histogram of Age at First Marriage") +
+  xlab("Age at First Marriage") +
+  ylab("Frequency")
 
-# Now, use ggsave to save the combined plot
-#ggsave("combined_age_first_marriage.png", plot = combined_plots, width = 10, height = 5)
+print(afm_hist)
+```
+
+```{r}
+#ggsave("age_first_marriage.png", plot = afm_hist, width = 8, height = 6)
 ```
 
 ### Creating Binary Variables for Child Marriage Under 18 and 16
@@ -324,9 +326,9 @@ imputed_df <- imputed_df %>%
 ```
 
 
-### EDA
+# 3. Exploratory Data Analysis
 
-#### Vietnam Map with Regions and Their Percentages of Child Marriage (under 18)
+### Vietnam Map with Regions and Their Percentages of Child Marriage (under 18)
 
 ```{r}
 # Aggregate the data by region to get the total number of child marriages under 18 per region
@@ -350,7 +352,6 @@ region_counts$region_name <- factor(region_counts$region_name, levels = 1:6, lab
 # Display the final data frame
 print(region_counts)
 ```
-
 
 ```{r}
 # Updated mapping including all provinces and cities in the Red River Delta
@@ -380,13 +381,6 @@ province_to_region <- data.frame(
 
 ```
 
-
-```{r}
-# Check the mapping
-#print(province_to_region)
-```
-
-
 ```{r message=FALSE, warning=FALSE}
 # Read shapefile
 vietnam_shape <- st_read('/Users/hollyduong/Desktop/DA 401/ChildMarriageInVietnam/gadm41_VNM_shp')
@@ -400,7 +394,6 @@ vietnam_regions <- vietnam_shape_with_region %>%
   group_by(Region) %>%
   summarise(geometry = st_union(geometry), .groups = 'drop')
 ```
-
 
 ```{r}
 # Join the aggregated shapefile data with the child marriage data
@@ -418,9 +411,10 @@ mapvn <- ggplot(data = vietnam_map_data) +
   geom_sf(aes(fill = factor(Region, levels = names(colors_ordered))), color = NA) +
   geom_sf_text(aes(label = sprintf("%.1f%%", married_u18_perc_of_total)), size = 4, hjust = 0.5, vjust = 0.5) +
   scale_fill_manual(values = colors_ordered, name = "Region") +
-  labs(title = "Regional Contribution of Female Child Marriage Rates to Total Rates in Vietnam") +
+  labs(title = "Map of Vietnam: \nRegional Contribution to National Child Marriage Rates") +
   theme_void() +
-  theme(legend.position = "right")
+  theme(legend.position = "right") +
+  theme(plot.title = element_text(hjust = 0.5))
 
 print(mapvn)
 ```
@@ -429,7 +423,7 @@ print(mapvn)
 #ggsave("mapvn.png", plot = mapvn, width = 8, height = 6, dpi = 300)
 ```
 
-#### Marital Status Among Female Respondants by Region in Vietnam
+### Marital Status Among Female Respondants by Region in Vietnam
 
 ```{r}
 total_child_marriages_u18 <- sum(imputed_df$child_marriage == 1)
@@ -445,9 +439,11 @@ counts_df$married_u18 <- (counts_df$married_u18 / total_child_marriages_u18) * 1
 counts_df$married_u16 <- (counts_df$married_u16 / total_child_marriages_u18) * 100
 ```
 
-
 ```{r}
-p <- ggplot(counts_df, aes(x = factor(region))) +
+# Add a new column for total percentages
+counts_df$total_percentage <- counts_df$married_u18 + counts_df$married_u16
+
+p <- ggplot(counts_df, aes(x = reorder(factor(region), -total_percentage))) +
   geom_bar(aes(y = married_u18, fill = "Married before 18 years old"), stat = "identity", width = 0.5) +
   geom_bar(aes(y = married_u16, fill = "Married before 16 years old"), stat = "identity", width = 0.5) +
   
@@ -465,12 +461,10 @@ p <- ggplot(counts_df, aes(x = factor(region))) +
                     name = "Marital Status") +
   labs(x = "Region", y = "Percentage", title = "Marital Status Among Female Respondents by Region", element_text(size = 14)) +
   theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5, size = 18),
-        plot.margin = margin(t = 10, r = 10, b = 10, l = 10, unit = "mm"), 
-        axis.text.x = element_text(size = 12, angle = 45, hjust = 1), 
-        legend.position = c(0.85,0.8),
-        legend.text = element_text(size = 12),
-        legend.title = element_text(size = 14)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.margin = margin(t = 1, r = 1, b = 1, l = 1, unit = "mm"), 
+        axis.text.x = element_text(angle = 45, hjust = 1), 
+        legend.position = c(0.85,0.8))+
   scale_x_discrete(labels = c("1" = "Red River Delta", "2" = "Northern Midlands And Mountain", 
                               "3" = "North Central And Central Coastal", "4" = "Central Highlands", 
                               "5" = "South East", "6" = "Mekong River Delta"))
@@ -483,9 +477,9 @@ print(p)
 ```
 
 
-### Preparing for Regression Analysis
+# 4. Pre-Analysis
 
-#### Correlation Matrix
+### Correlation Matrix
 
 ```{r}
 # Calculate correlation matrix
@@ -506,6 +500,7 @@ corr_matrix <- ggplot(melted_cor_matrix, aes(Var1, Var2, fill = value)) +
         name="Pearson\nCorrelation"
     ) +
     theme_minimal() + 
+    theme(plot.title = element_text(hjust = 0.5)) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
     xlab("") + 
     ylab("") +
@@ -519,8 +514,7 @@ ggplotly(corr_matrix)
 #write.csv(imputed_df, "imputed_df.csv", row.names = FALSE)
 ```
 
-
-#### Converting Categorical and Binary Variables to Factors
+### Converting Categorical and Binary Variables to Factors
 
 ```{r}
 # Convert nominal and ordinal variables to factors
@@ -534,10 +528,9 @@ imputed_df$wealth_index <- factor(imputed_df$wealth_index, ordered = FALSE)
 ```
 
 
+# 5. Approach 1: Logistic Regression Analysis with Data Imputation
 
-### Logistic Regression Analysis
-
-### Model 1 - Base Logistic Regression Model
+## Model 1 - Base Logistic Regression Model
 
 ```{r}
 # Baseline model for reference
@@ -547,7 +540,7 @@ baseline_model <- glm(child_marriage ~ area + education_level + wealth_index + h
 summary(baseline_model)
 ```
 
-### Model 2 - Adding Fixed Effects to Base Model
+## Model 2 - Adding Fixed Effects to Base Model
 
 ```{r}
 # Enhanced model with additional fixed effects
@@ -559,7 +552,7 @@ enhanced_model <- glm(child_marriage ~ area + region + education_level + ethnici
 summary(enhanced_model)
 ```
 
-### Model 3 - Model with Interaction Terms (area:education_level)
+## Model 3 - Model with Interaction Terms (area:education_level)
 
 ```{r}
 # Adding the interaction term between area and education level
@@ -567,8 +560,7 @@ model_interaction <- update(enhanced_model, . ~ . + area:education_level)
 summary(model_interaction)
 ```
 
-
-### Logistic Regression Models Comparison (Odd Ratios and 95% Confidence Intervals)
+## Models Comparison (Odd Ratios and 95% Confidence Intervals)
 
 ```{r}
 # Function to add significance asterisks
@@ -667,10 +659,9 @@ combined_results <- combined_results %>%
 print(combined_results)
 ```
 
+## Models Validation
 
-### Models Validation
-
-#### Accessing Multicollinearity (VIF)
+### Accessing Multicollinearity (VIF)
 
 ```{r}
 # VIFs check (A VIF value > 5 indicates high multicollinearity)
@@ -692,8 +683,7 @@ print(model_3_vif)
 - Model 3 exhibits more noticeable multicollinearity, particularly with the `area` variable and its interaction with `education_level`; their VIF values are significantly higher (around 3.57, 2.3, and 2.37, respectively). Although these values are below 5, the increase is substantial compared to the previous models and could start to affect the reliability and interpretability of the regression coefficients for these variables.
 - High multicollinearity in models, especially those with interaction terms, doesn't invalidate the model but does complicate the interpretation of specific coefficients.
 
-
-#### Likelihood Ratio Test (LRT)
+### Likelihood Ratio Test (LRT)
 
 ```{r}
 # Model 1 vs. Model 2
@@ -716,8 +706,7 @@ anova(enhanced_model, model_interaction, test="Chisq")
 
 The p-value is not significant.
 
-
-#### Assessing AIC and BIC
+### Assessing AIC and BIC
 
 ```{r}
 # Create a data frame to hold AIC and BIC values
@@ -733,8 +722,7 @@ print(aic_bic_comparison)
 
 Model 2 has the lowest AIC and BIC values of all, indicating that it might be the best model among the three in terms of balancing fit and complexity.
 
-
-#### Hosmer-Lemeshow Test
+### Hosmer-Lemeshow Test
 
 ```{r}
 # 1. Hosmer-Lemeshow Test for the Model 1
@@ -749,8 +737,7 @@ hoslem.test(model_interaction$y, fitted(model_interaction), g=10)
 
 A large p-value (>0.05) indicates a good fit, meaning that there's no significant difference between the observed and predicted values. Through each model, the p-value increases which suggests that our decision to include fixed effects and interaction terms are significant.
 
-
-#### Residuals Plot
+### Residuals Plot
 
 ```{r message=FALSE, warning=FALSE}
 binnedplot(fitted(model_interaction),
@@ -763,8 +750,7 @@ binnedplot(fitted(model_interaction),
            col.int = "gray")
 ```
 
-
-#### ROC Curve and AUC
+### ROC Curve and AUC
 
 ```{r message=FALSE, warning=FALSE}
 invisible(plot(roc(imputed_df$child_marriage,
@@ -824,12 +810,12 @@ All models demonstrate good ability to distinguish between cases and controls. A
 The Model 2 and Model 3 only show marginal improvements in AUC compared to the Model 1. This suggests that while the additional complexity (more variables and interaction terms) does contribute slightly to model performance, the gains are not substantial.
 
 
+# 6. Approach 2: Logistic Regression Analysis with No Data Imputation
+*After careful consideration regarding data reliability, this project will proceed with Approach 2.*
 
-## Conservative Approach: Redo Analysis with Actual Data (No Imputation)
+## Pre-Analysis
 
-### Data Prep
-
-#### Recreate DataFrames with Removed NAs
+### Recreate DataFrames with Removed NAs
 
 ```{r}
 # No imputation -- Remove rows with any missing data from 'female_df'
@@ -837,7 +823,7 @@ og_df <- na.omit(married_df)
 print(og_df)
 ```
 
-#### Recreate Necessary Variables
+### Recreate Necessary Variables
 
 ```{r}
 # Convert "age at first marriage" into a binary variable to indicate child marriage
@@ -860,7 +846,7 @@ og_df <- og_df %>%
   dplyr::select(child_marriage, child_marriage_u16, everything())
 ```
 
-#### Converting Categorical and Binary Variables to Factors
+### Converting Categorical and Binary Variables to Factors
 
 ```{r}
 # Convert nominal and ordinal variables to factors
@@ -877,10 +863,7 @@ og_df$wealth_index <- factor(og_df$wealth_index, ordered = FALSE)
 #write.csv(og_df, "og_df.csv", row.names = FALSE)
 ```
 
-
-### Recreate Logistic Regression Models Without Imputed Data
-
-#### Model 1: Base Model
+## Model 1: Base Model
 
 ```{r}
 # Base model
@@ -890,7 +873,7 @@ base_model_no_impute <- glm(child_marriage ~ area + education_level + wealth_ind
 summary(base_model_no_impute)
 ```
 
-#### Model 2: Base Model with Fixed Effects
+## Model 2: Base Model with Fixed Effects
 
 ```{r}
 # Enhanced model with additional fixed effects
@@ -901,7 +884,7 @@ summary(enhanced_model_no_impute)
 ```
 
 
-#### Model 3: Base Model with Fixed Effects and Interaction Terms
+## Model 3: Base Model with Fixed Effects and Interaction Terms
 
 ```{r}
 # Adding the interaction term between  area and education level
@@ -909,8 +892,7 @@ interaction_model_no_impute <- update(enhanced_model_no_impute, . ~ . + area:edu
 summary(interaction_model_no_impute)
 ```
 
-
-#### Models With vs Without Imputed Data
+# 7. Approach Comparison:
 
 ```{r}
 # Extracting data from the models
@@ -928,7 +910,7 @@ extract_model_data <- function(model) {
 }
 ```
 
-#### Model 1: Base Model
+## Model 1: Base Model
 
 ```{r}
 # Applying the function to each model
@@ -947,7 +929,7 @@ print(base_comparison_data)
 - Significance of Area: This variable's significance suggests geographical variation is an important factor, but its influence is reduced in the non-imputed model.
 - The overall patterns suggest that while some predictors are consistently influential, others are sensitive to how missing data is handled.
 
-#### Model 2: Base Model with Fixed Effects
+## Model 2: Base Model with Fixed Effects
 
 ```{r}
 # Applying the function to each model
@@ -966,7 +948,7 @@ print(enhanced_comparison_data)
 - For some variables (e.g., wealth_index categories), the significance and estimate values change between the models. 
 - The loss of significance in many variables in the non-imputed model suggests that the missing data may not be random and could be related to the variables' influence on the outcome.
 
-#### Model 3: Base Model with Fixed Effects and Interaction Terms
+## Model 3: Base Model with Fixed Effects and Interaction Terms
 
 ```{r}
 # Applying the function to each model
@@ -985,8 +967,7 @@ print(interaction_comparison_data)
 - The differing levels of significance for variables like wealth index categories and awareness of HIV/AIDS between models raise questions about how missing data impacts these variables.
 - The loss of significance in many variables in the non-imputed model suggests that the missing data may not be random and could be related to the variables' influence on the outcome.
 
-
-### Logistic Regression Models Comparison (Odd Ratios and 95% Confidence Intervals)
+# 8. Models Comparison (Odd Ratios and 95% Confidence Intervals)
 
 ```{r}
 # Tidy the baseline model with confidence intervals
@@ -1110,11 +1091,9 @@ This variable shows no consistent or significant association with the outcome ac
 
 - The interaction terms involving ethnicity and access to media are introduced in Model 3, but none show statistical significance.
 
+# 9. Models Validation
 
-
-### Models Validation
-
-#### Accessing Multicollinearity (VIF)
+## Accessing Multicollinearity (VIF)
 
 ```{r}
 # VIFs check (A VIF value > 5 indicates high multicollinearity)
@@ -1136,8 +1115,7 @@ print(model_3_vif)
 - Model 3 exhibits more noticeable multicollinearity, particularly with `area`, `education_level` and its interaction with one another`; their VIF values are significantly higher (around 4.2, 2.17, and 2.25, respectively). Although these values are below 5, the increase is substantial compared to the previous models and could start to affect the reliability and interpretability of the regression coefficients for these variables.
 - High multicollinearity in models, especially those with interaction terms, doesn't invalidate the model but does complicate the interpretation of specific coefficients.
 
-
-#### Likelihood Ratio Test (LRT)
+## Likelihood Ratio Test (LRT)
 
 ```{r}
 # Model 1 vs. Model 2
@@ -1163,8 +1141,7 @@ The residual deviance in Model 3 is slightly lower compared to Model 1, indicati
 
 The p-value of 0.5896 is not below the common significance level. This indicates that the addition of the interaction term `area:education_level` in Model 3 does not significantly improve the model fit compared to Model 2. In simpler terms, the interaction between `area` and `education_level` does not seem to have a significant effect on predicting child marriage.
 
-
-#### Assessing AIC and BIC
+## Assessing AIC and BIC
 
 ```{r}
 # Create a data frame to hold AIC and BIC values
@@ -1180,8 +1157,7 @@ print(aic_bic_comparison)
 
 Model 2 has the lowest AIC and BIC values of all, indicating that it might be the best model among the three in terms of balancing fit and complexity. 
 
-
-#### Hosmer-Lemeshow Test
+## Hosmer-Lemeshow Test
 
 ```{r}
 # 1. Hosmer-Lemeshow Test for the Model 1
@@ -1196,8 +1172,7 @@ hoslem.test(interaction_model_no_impute$y, fitted(interaction_model_no_impute), 
 
 A large p-value (>0.05) indicates a good fit, meaning that there's no significant difference between the observed and predicted values. Through each model, the p-value increases which suggests that our decision to include fixed effects and interaction terms are significant.
 
-
-#### Residuals Plot
+## Residuals Plot
 
 ```{r message=FALSE, warning=FALSE}
 binnedplot(fitted(interaction_model_no_impute),
@@ -1210,8 +1185,7 @@ binnedplot(fitted(interaction_model_no_impute),
            col.int = "gray")
 ```
 
-
-#### ROC Curve and AUC
+## ROC Curve and AUC
 
 ```{r message=FALSE, warning=FALSE}
 invisible(plot(roc(og_df$child_marriage,
