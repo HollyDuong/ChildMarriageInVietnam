@@ -33,9 +33,9 @@ To run the analysis, you need to have R and the following libraries installed:
 
 ## Code
 The project structure includes several folders and files:
-- **CSV for references:** Folder containing exported CSV files of datasets for reference.
-- **Data:** Original dataset (encoded).
-- **Images:** Folder containing exported figures and tables.
+- **Dataframes:** Folder containing exported CSV files of datasets for reference.
+- **Raw Data:** Original dataset (encoded).
+- **Visuals:** Folder containing exported figures and tables.
 - **gadm41_VNM_shp:** Geodata for Vietnam map.
 - **ChildMarriage.Rmd:** R Markdown file containing the complete analysis code.
 - **ChildMarriage.html:** HTML export of the R Markdown file for easier viewing.
